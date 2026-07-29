@@ -1,0 +1,17 @@
+# dependencias
+/node_modules
+
+# builds de Next.js
+/.next/
+/out/
+/build
+
+# env locales (¡no subir tu clave!)
+.env*.local
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts
+
+# varios
+.DS_Store

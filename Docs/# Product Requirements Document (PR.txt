@@ -1,0 +1,127 @@
+# Product Requirements Document (PRD)
+
+## Nombre del proyecto
+Plataforma de Educación Financiera impulsada por IA
+
+---
+
+# 1. Resumen Ejecutivo
+La plataforma es una academia de educación financiera.
+Su propósito es ayudar a las personas a comprender conceptos financieros.
+La IA actuará como un tutor personal capaz de explicar y adaptar.
+La plataforma no entregará asesoría financiera ni de inversión.
+Su objetivo es desarrollar competencias financieras.
+
+---
+
+# 2. Problema
+Actualmente existen miles de recursos sobre finanzas.
+Sin embargo:
+
+- La información está dispersa.
+- Muchos contenidos asumen conocimientos previos.
+- Existen explicaciones demasiado técnicas.
+- Hay exceso de contenido orientado únicamente a invertir.
+- El aprendizaje rara vez es personalizado.
+
+Como consecuencia, muchas personas abandonan el aprendizaje.
+
+---
+
+# 3. Visión del Producto
+Crear la plataforma de educación financiera con IA.
+
+---
+
+# 4. Público Objetivo
+
+Usuario principal:
+- Personas mayores de 18 años.
+- Interesadas en aprender educación financiera.
+- Sin necesidad de conocimientos previos.
+- Que prefieren aprender conversando.
+
+Usuario secundario:
+- Personas con conocimientos intermedios.
+- Inversionistas principiantes.
+- Usuarios que desean reforzar conceptos específicos.
+
+---
+
+# 5. Objetivos del Producto
+La plataforma debe permitir que el usuario:
+
+- Comprenda conceptos financieros.
+- Desarrolle hábitos financieros saludables.
+- Construya pensamiento crítico.
+- Aprenda mediante práctica.
+- Progrese a su propio ritmo.
+
+---
+
+# 6. Principios del Producto
+Todo el desarrollo deberá respetar estos principios:
+
+- Enseñar antes que responder.
+- Adaptarse al nivel del estudiante.
+- Explicar el razonamiento.
+- Promover pensamiento crítico.
+- Mantener neutralidad.
+- Priorizar el aprendizaje sobre la rapidez.
+- Ser transparente cuando exista incertidumbre.
+
+---
+
+# 7. Alcance del MVP
+La primera versión incluirá:
+
+- Registro de usuarios.
+- Perfil del estudiante.
+- Tutor IA.
+- Ruta personalizada de aprendizaje.
+- Lecciones estructuradas.
+- Ejercicios.
+- Quizzes.
+- Seguimiento del progreso.
+- Historial de conversaciones.
+
+---
+
+# 8. Fuera del Alcance
+La plataforma NO:
+
+- Recomendará activos específicos.
+- Gestionará dinero.
+- Ejecutará inversiones.
+- Prometerá rentabilidades.
+- Sustituirá asesoría profesional.
+- Realizará predicciones del mercado.
+
+---
+
+# 9. Experiencia Esperada
+El usuario no debe sentir que conversa con un bot genérico.
+Debe sentir que cuenta con un profesor particular.
+
+---
+
+# 10. Métricas de Éxito
+El éxito del producto se medirá mediante indicadores clave:
+
+- Tasa de finalización de rutas de aprendizaje.
+- Progreso en competencias.
+- Retención de usuarios.
+- Tiempo de aprendizaje semanal.
+- Resultados en evaluaciones.
+- Satisfacción del usuario.
+
+---
+
+# 11. Roadmap General
+
+Fase 1: Modelo educativo.
+Fase 2: Tutor IA.
+Fase 3: Plataforma web.
+Fase 4: Gamificación.
+Fase 5: Expansión del contenido.
+Fase 6: Nuevas herramientas educativas.

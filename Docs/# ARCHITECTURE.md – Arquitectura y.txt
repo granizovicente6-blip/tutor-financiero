@@ -1,0 +1,62 @@
+# ARCHITECTURE.md – Arquitectura y Stack Tecnológico
+
+## 1. Visión General del Sistema
+La plataforma es una aplicación web full-stack construida con una arquitectura monolítica moderna (Next.js App Router). El backend maneja la autenticación, la persistencia de datos en PostgreSQL y las llamadas seguras a la API de Claude para la interacción del tutor pedagógico.
+
+---
+
+## 2. Stack Tecnológico
+
+| Capa | Tecnología | Razón de Elección |
+| :--- | :--- | :--- |
+| **Framework Web** | Next.js 14+ (React / App Router) | Servidor unificado (SSR/Server Actions), rutas API eficientes y óptimo rendimiento. |
+| **Lenguaje** | TypeScript | Tipado estático para prevenir errores en tiempo de desarrollo y mejorar mantenimiento. |
+| **Estilos / UI** | Tailwind CSS + shadcn/ui | Desarrollo rápido de interfaces modernas, accesibles y adaptables a móviles. |
+| **Base de Datos** | PostgreSQL (Supabase / Neon) | Base de datos relacional robusta para usuarios, progreso y chats. |
+| **ORM / Cliente BD** | Prisma / Drizzle ORM | Consultas con seguridad de tipos (type-safe) y migraciones sencillas. |
+| **Autenticación** | NextAuth.js / Supabase Auth | Manejo seguro de sesiones, registros y login con proveedores. |
+| **Motor de IA** | Anthropic API (Claude 3.5 Sonnet / Haiku) | Modelo de alto razonamiento pedagógico e instrucción contextual estructurada. |
+| **Despliegue** | Vercel | Integración nativa con Next.js y despliegue continuo (CI/CD). |
+
+---
+
+## 3. Diagrama de Flujo de Datos
+
+```text
+[ Usuario / Frontend (React) ]
+             │
+             │ (Server Actions / API Routes)
+             ▼
+[ Backend Next.js ] ──────────────► [ PostgreSQL (Base de Datos) ]
+             │                       - Usuarios y Perfiles
+             │                       - Historial de Chat
+             │                       - Progreso y Rutas
+             ▼
+[ Anthropic API (Claude) ]
+  - Recibe System Prompt (PEDAGOGY.md rules)
+  - Recibe contexto del estudiante + Historial
+
+. Esquema Principal de Base de Datos (Modelo Inicial)
+Users: Id, email, nombre, fecha de registro, nivel actual (principiante/intermedio/avanzado).
+
+LearningPaths: Rutas de aprendizaje compuestas por módulos y lecciones estructuradas.
+
+UserProgress: Relación usuario-lección, estado (no iniciado, en proceso, completado), puntajes de quizzes.
+
+ChatSessions: Sesión de conversación activa del usuario con el tutor de IA.
+
+ChatMessages: Historial de mensajes (user / assistant), marcas de tiempo y tokens consumidos.
+
+5. Integración con el Motor de IA
+System Prompt Dinámico: Cada petición enviada a la API de Claude combina las reglas de SYSTEM_PROMPT.md, las directrices de PEDAGOGY.md y el nivel/progreso del usuario.
+
+Streaming de Respuestas: Uso de Server-Sent Events (SSE) para renderizar la respuesta del tutor en tiempo real, mejorando la experiencia de usuario (UX).
+
+Control de Contexto: Truncado e historial en ventana deslizante para evitar consumo excesivo de tokens manteniendo la memoria relevante de la conversación.
+
+6. Seguridad y Buenas Prácticas
+Protección de API Keys: La clave de la API de Anthropic se gestiona estrictamente mediante variables de entorno (.env.local) en el servidor. Nunca se expone al cliente.
+
+Validación de Datos: Uso de Zod para validar las entradas del usuario y las estructuras del backend.
+
+Límites de Uso (Rate Limiting): Control de peticiones por usuario para prevenir sobrecostos en el uso de la API de IA.

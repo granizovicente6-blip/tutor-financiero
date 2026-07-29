@@ -1,0 +1,83 @@
+# ROADMAP.md – Plan de Desarrollo y Fases del Proyecto
+
+## 1. Visión General
+Este documento traza la ruta de ejecución para construir la Plataforma de Educación Financiera. El desarrollo se divide en fases iterativas para validar rápidamente la propuesta pedagógica antes de expandir el producto.
+
+---
+
+## 2. Fases de Desarrollo
+
+```text
+Fase 1: Fundamentos ➔ Fase 2: Motor IA ➔ Fase 3: App Web ➔ Fase 4: Experiencia ➔ Fase 5: Expansión
+
+🟢 Fase 1: Fundamentos y Documentación (Completada)
+Objetivo: Establecer la visión del producto, el enfoque pedagógico y la arquitectura.
+
+[x] Redacción del PRD.md (Alcance y visión general).
+
+[x] Redacción del PEDAGOGY.md (Principios didácticos y método socrático).
+
+[x] Redacción del ARCHITECTURE.md (Stack tecnológico y modelos de datos).
+
+[x] Redacción del SYSTEM_PROMPT.md (Instrucciones para el modelo de IA).
+
+🟢 Fase 2: Motor de IA y Prototipo del Tutor (MVP Backend) — Completada
+Objetivo: Validar la calidad pedagógica del tutor interactuando directamente con la API de Anthropic.
+
+[x] Configuración del proyecto Next.js 14+ con TypeScript y Tailwind CSS.
+
+[x] Creación de la ruta de API (/api/chat) para conectar con la API de Claude.
+
+[x] Inyección dinámica del SYSTEM_PROMPT.md según el perfil del usuario.
+
+[x] Implementación de respuesta en tiempo real (Streaming / SSE).
+
+[x] Pruebas de estrés pedagógico (evaluar que no dé consejos de inversión y aplique el método socrático).
+
+🟢 Fase 3: Plataforma Web Base y Persistencia (MVP Frontend + BD) — Completada
+Objetivo: Crear la interfaz de usuario funcional y guardar las interacciones en la base de datos.
+
+[x] Configuración de PostgreSQL (Supabase) y acceso a datos con @supabase/ssr (sin ORM externo).
+
+[x] Implementación de Autenticación de Usuarios (Supabase Auth).
+
+[x] Creación del perfil del estudiante (guardar nivel: Principiante / Intermedio / Avanzado).
+
+[x] Interfaz del Chat (componentes UI de chat, historial de mensajes por sesión).
+
+[x] Persistencia de conversaciones en la base de datos.
+
+🟢 Fase 4: Estructura del Curso y Gamificación Inicial — Completada
+Objetivo: Organizar el aprendizaje en lecciones estructuradas con seguimiento de progreso.
+
+[x] Personalización del tutor según el nivel del estudiante (Opción 1: perfil con financial_level + System Prompt adaptativo).
+
+[x] Mapeo de la primera ruta de aprendizaje ("Fundamentos de Finanzas Personales") — currículum en código (src/lib/curriculum.ts): 3 módulos, 6 lecciones con páginas propias (/dashboard/[lessonSlug]).
+
+[x] Creación del Dashboard del Estudiante (Progreso %, lecciones completadas) — /dashboard con barra de progreso y progreso persistido en la tabla lesson_progress (RLS).
+
+[x] Sistema de Quizzes / Mini-evaluaciones al final de cada tema (2–3 preguntas por lección en curriculum.ts; puntaje calificado en el servidor y guardado en lesson_progress.quiz_score).
+
+[x] Retroalimentación automatizada del Tutor IA sobre las respuestas del quiz (streaming vía /api/quiz/feedback, tono socrático adaptado al nivel).
+
+🟢 Fase 5: Expansión de Contenidos y Herramientas — Completada
+Objetivo: Ampliar la oferta educativa y añadir herramientas interactivas.
+
+[x] Rutas de aprendizaje avanzadas (Inversiones y Mercados, Macroeconomía Básica, Gestión de Riesgo) — 3 rutas nuevas en curriculum.ts (2 módulos × 2 lecciones con quiz cada una); Dashboard con selector de ruta (pestañas vía ?ruta=slug).
+
+[x] Simuladores visuales (Calculadora de interés compuesto, presupuestador interactivo).
+    ✔ Calculadora de interés compuesto / proyección de ahorro (cómputo puro en lib/finance.ts, gráfico SVG propio y sliders en vivo, ruta /simuladores/interes-compuesto).
+    ✔ Presupuestador interactivo 50/30/20 (ingreso + reparto ajustable, barra apilada y desglose, ruta /simuladores/presupuesto).
+
+[x] Sistema de rachas de estudio (streaks) para fomentar la retención — columnas en profiles + función atómica touch_streak() (RPC); se activa al completar lección o quiz; píldora 🔥 en el header y resumen con récord en el sidebar.
+
+🟢 Fase 6: Optimización y Lanzamiento — Completada
+Objetivo: Preparar el sistema para uso público y escala.
+
+[x] Implementación de Límites de Uso (Rate Limiting) para control de costos de la API — ventana fija por usuario en Postgres (función atómica check_rate_limit, migración 004): 15/min chat, 10/min quiz; fail-open + respuesta 429 con Retry-After.
+
+[x] Auditoría de accesibilidad UI y diseño responsive para móviles — sin scroll horizontal (header con min-w-0/truncate), inputs con aria-label + inputMode, gráficos SVG responsivos, viewport explícito. Build de producción (npm run build) limpio.
+
+[x] Despliegue en producción (Vercel) preparado — .env.example con las variables requeridas; sin vercel.json (autodetección de Next.js); checklist de despliegue documentado.
+
+[x] Medición de métricas de éxito — registro simple de eventos (analytics_events, migración 005): lesson_completed y quiz_completed (con puntaje) para medir la tasa de finalización.

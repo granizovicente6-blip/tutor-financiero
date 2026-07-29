@@ -1,0 +1,45 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import type { AuthState } from "@/lib/types";
+
+/**
+ * Server Action: registra un nuevo usuario con email y contraseña.
+ *
+ * Comportamiento según la configuración de Supabase Auth:
+ *  - Si la confirmación por correo está DESACTIVADA: se crea la sesión y
+ *    redirigimos a la app (`/`).
+ *  - Si está ACTIVADA (por defecto): no hay sesión aún; devolvemos un mensaje
+ *    pidiendo al usuario que confirme su correo antes de iniciar sesión.
+ */
+export async function register(_prev: AuthState, formData: FormData): Promise<AuthState> {
+  const email = String(formData.get("email") ?? "").trim();
+  const password = String(formData.get("password") ?? "");
+
+  if (!email || !password) {
+    return { error: "Introduce tu correo y contraseña." };
+  }
+  if (password.length < 6) {
+    return { error: "La contraseña debe tener al menos 6 caracteres." };
+  }
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.signUp({ email, password });
+
+  if (error) {
+    if (error.message.toLowerCase().includes("already registered")) {
+      return { error: "Este correo ya está registrado. Inicia sesión." };
+    }
+    return { error: "No se pudo crear la cuenta. Inténtalo de nuevo." };
+  }
+
+  // Sesión presente => confirmación desactivada => entrar directo.
+  if (data.session) {
+    redirect("/");
+  }
+
+  return {
+    message: "¡Cuenta creada! Revisa tu correo para confirmarla antes de iniciar sesión.",
+  };
+}
