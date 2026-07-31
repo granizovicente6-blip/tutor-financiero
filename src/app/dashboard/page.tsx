@@ -1,8 +1,22 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { Dashboard, type CategorySection } from "@/components/Dashboard";
-import { getModulesGroupedByCategory } from "@/lib/curriculum";
+import {
+  Dashboard,
+  type CategorySection,
+  type LockedNotice,
+} from "@/components/Dashboard";
+import { getLessonBySlug, getModulesGroupedByCategory } from "@/lib/curriculum";
+import {
+  buildStatusMap,
+  getPreviousLessonInCategory,
+  getUnlockedLessonSlugs,
+} from "@/lib/progression";
 import type { LessonProgress } from "@/lib/types";
+
+interface DashboardPageProps {
+  /** `?bloqueada=<slug>`: llega así quien intentó abrir una lección con candado. */
+  searchParams: { bloqueada?: string };
+}
 
 /**
  * Currículum reducido a lo que muestra el dashboard.
@@ -35,8 +49,9 @@ function getCategorySections(): CategorySection[] {
  * - Carga el progreso del usuario y lo combina con el currículum (en código),
  *   agrupado en las dos categorías principales ("Finanzas Personales" e
  *   "Inversiones"), que el dashboard muestra como pestañas.
+ * - Calcula aquí qué lecciones están desbloqueadas: el cliente solo las pinta.
  */
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -51,11 +66,31 @@ export default async function DashboardPage() {
     .select("lesson_id, status, completed_at, quiz_score");
 
   const progress = (data ?? []) as LessonProgress[];
+  const statusBySlug = buildStatusMap(progress);
+  const unlockedSlugs = getUnlockedLessonSlugs(statusBySlug);
+
+  // Aviso cuando se intentó entrar por URL a una lección aún bloqueada. Se
+  // vuelve a verificar el candado aquí: el parámetro viene de la URL y no es
+  // de fiar por sí solo.
+  const blockedSlug = searchParams.bloqueada;
+  const blocked = blockedSlug ? getLessonBySlug(blockedSlug) : null;
+  const showNotice = blocked !== null && !unlockedSlugs.has(blocked.lesson.slug);
+
+  const lockedNotice: LockedNotice | null =
+    blocked && showNotice
+      ? {
+          lessonTitle: blocked.lesson.title,
+          requiredTitle: getPreviousLessonInCategory(blocked.lesson.slug)?.title ?? null,
+        }
+      : null;
 
   return (
     <Dashboard
       categories={getCategorySections()}
       progress={progress}
+      unlockedSlugs={[...unlockedSlugs]}
+      initialCategory={blocked && showNotice ? blocked.module.category : undefined}
+      lockedNotice={lockedNotice}
       userEmail={user.email ?? ""}
     />
   );

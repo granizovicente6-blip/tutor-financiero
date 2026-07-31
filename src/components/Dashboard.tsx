@@ -37,6 +37,13 @@ export interface CategorySection {
   modules: ModuleSummary[];
 }
 
+/** Aviso mostrado al llegar desde una lección bloqueada por URL directa. */
+export interface LockedNotice {
+  lessonTitle: string;
+  /** Lección que hay que completar antes (null si no se pudo determinar). */
+  requiredTitle: string | null;
+}
+
 // ---------------------------------------------------------------------------
 // Etiquetas y estilos por estado de lección
 // ---------------------------------------------------------------------------
@@ -123,6 +130,15 @@ interface DashboardProps {
   categories: CategorySection[];
   /** Progreso del usuario (una fila por lección con la que ya interactuó). */
   progress: LessonProgress[];
+  /**
+   * Lecciones desbloqueadas, calculadas en el servidor con las reglas de
+   * `lib/progression`. El resto se muestra con candado y sin enlace.
+   */
+  unlockedSlugs: string[];
+  /** Pestaña abierta al cargar (por defecto, Finanzas Personales). */
+  initialCategory?: Category;
+  /** Aviso a mostrar si el usuario llegó desde una lección bloqueada. */
+  lockedNotice?: LockedNotice | null;
   userEmail: string;
 }
 
@@ -141,19 +157,45 @@ function categoryLessons(section: CategorySection): LessonSummary[] {
   return section.modules.flatMap((mod) => mod.lessons);
 }
 
-export function Dashboard({ categories, progress, userEmail }: DashboardProps) {
-  const [activeCategory, setActiveCategory] = useState<Category>(DEFAULT_CATEGORY);
+/**
+ * Título de la lección anterior en la secuencia de la categoría, por slug.
+ *
+ * Solo se usa para redactar el mensaje del candado: quién está bloqueado lo
+ * decide el servidor (`unlockedSlugs`), no este mapa.
+ */
+function previousTitles(section: CategorySection): Map<string, string> {
+  const sequence = categoryLessons(section);
+  const titles = new Map<string, string>();
+  for (let i = 1; i < sequence.length; i++) {
+    titles.set(sequence[i].slug, sequence[i - 1].title);
+  }
+  return titles;
+}
+
+export function Dashboard({
+  categories,
+  progress,
+  unlockedSlugs,
+  initialCategory,
+  lockedNotice,
+  userEmail,
+}: DashboardProps) {
+  const [activeCategory, setActiveCategory] = useState<Category>(
+    initialCategory ?? DEFAULT_CATEGORY,
+  );
 
   // Mapa slug -> estado, para consulta O(1) al renderizar.
   const statusBySlug = new Map<string, LessonStatus>(
     progress.map((p) => [p.lesson_id, p.status]),
   );
+  const unlocked = new Set(unlockedSlugs);
 
   // Si la categoría por defecto no existiera en los datos, caemos en la primera.
   const section =
     categories.find((c) => c.category === activeCategory) ?? categories[0];
   const meta = CATEGORY_META[section.category];
   const stats = completion(categoryLessons(section), statusBySlug);
+  const prevTitles = previousTitles(section);
 
   return (
     <div className="min-h-dvh bg-slate-100 text-slate-800">
@@ -178,6 +220,23 @@ export function Dashboard({ categories, progress, userEmail }: DashboardProps) {
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-6">
+        {/* Aviso: llegó aquí por intentar abrir una lección bloqueada */}
+        {lockedNotice && (
+          <div
+            role="status"
+            className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+          >
+            <p className="font-medium">
+              🔒 «{lockedNotice.lessonTitle}» todavía está bloqueada.
+            </p>
+            <p className="mt-0.5 text-amber-800">
+              {lockedNotice.requiredTitle
+                ? `Completa antes «${lockedNotice.requiredTitle}» para desbloquearla.`
+                : "Completa las lecciones previas para desbloquearla."}
+            </p>
+          </div>
+        )}
+
         {/* Pestañas de categoría */}
         <div
           role="tablist"
@@ -249,9 +308,13 @@ export function Dashboard({ categories, progress, userEmail }: DashboardProps) {
                   style={{ width: `${stats.percent}%` }}
                 />
               </div>
-              {stats.percent === 100 && (
+              {stats.percent === 100 ? (
                 <p className="mt-2 text-sm font-medium text-slate-700">
                   🎉 ¡Completaste toda la categoría! Excelente trabajo.
+                </p>
+              ) : (
+                <p className="mt-2 text-xs text-slate-500">
+                  Las lecciones se desbloquean en orden: completa una para abrir la siguiente.
                 </p>
               )}
             </div>
@@ -279,6 +342,50 @@ export function Dashboard({ categories, progress, userEmail }: DashboardProps) {
                   {module.lessons.map((lesson) => {
                     const status = statusBySlug.get(lesson.slug) ?? "not_started";
                     const statusMeta = STATUS_META[status];
+                    const isUnlocked = unlocked.has(lesson.slug);
+
+                    // ----- Lección bloqueada: sin enlace, atenuada y con candado.
+                    if (!isUnlocked) {
+                      const required = prevTitles.get(lesson.slug);
+                      const lockMessage = required
+                        ? `Completa «${required}» para desbloquear`
+                        : "Completa la lección anterior para desbloquear";
+
+                      return (
+                        <li key={lesson.slug}>
+                          <div
+                            aria-disabled="true"
+                            title={lockMessage}
+                            className="flex cursor-not-allowed items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 opacity-70"
+                          >
+                            <span className="flex-none text-sm" aria-hidden="true">
+                              🔒
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-slate-500">
+                                {lesson.title}
+                              </p>
+                              <p className="truncate text-xs text-slate-400">
+                                {lockMessage}
+                              </p>
+                              <div className="mt-1.5 flex items-center gap-2">
+                                <span className="rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-medium text-slate-500">
+                                  Bloqueada
+                                </span>
+                                <span className="text-[11px] text-slate-400">
+                                  {lesson.estimatedMinutes} min
+                                </span>
+                              </div>
+                            </div>
+                            <span className="flex-none rounded-lg bg-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-500">
+                              🔒 Bloqueada
+                            </span>
+                          </div>
+                        </li>
+                      );
+                    }
+
+                    // ----- Lección disponible.
                     return (
                       <li key={lesson.slug}>
                         <Link

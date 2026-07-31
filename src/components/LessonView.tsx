@@ -65,6 +65,8 @@ interface LessonViewProps {
   initialScore: number | null;
   prev: LessonNav | null;
   next: LessonNav | null;
+  /** La siguiente lección aún está bloqueada (se abre al completar esta). */
+  nextLocked?: boolean;
 }
 
 export function LessonView({
@@ -80,6 +82,7 @@ export function LessonView({
   initialScore,
   prev,
   next,
+  nextLocked = false,
 }: LessonViewProps) {
   const router = useRouter();
   const [status, setStatus] = useState<LessonStatus>(initialStatus);
@@ -208,15 +211,31 @@ export function LessonView({
             <span className="flex-1" />
           )}
           {next ? (
-            <Link
-              href={`/dashboard/${next.slug}`}
-              className="group flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-right shadow-sm transition hover:border-emerald-300"
-            >
-              <span className="block text-[11px] text-slate-400">Siguiente →</span>
-              <span className="block truncate text-sm font-medium text-slate-700 group-hover:text-emerald-700">
-                {next.title}
-              </span>
-            </Link>
+            // Completar esta lección es justo lo que desbloquea la siguiente, así
+            // que en cuanto el estado local pasa a "completada" el enlace se abre
+            // sin esperar al refresco del servidor.
+            nextLocked && !isCompleted ? (
+              <div
+                aria-disabled="true"
+                title="Completa esta lección para desbloquear la siguiente"
+                className="flex-1 cursor-not-allowed rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-right opacity-70"
+              >
+                <span className="block text-[11px] text-slate-400">🔒 Siguiente</span>
+                <span className="block truncate text-sm font-medium text-slate-500">
+                  Completa esta lección para desbloquearla
+                </span>
+              </div>
+            ) : (
+              <Link
+                href={`/dashboard/${next.slug}`}
+                className="group flex-1 rounded-xl border border-slate-200 bg-white px-4 py-3 text-right shadow-sm transition hover:border-emerald-300"
+              >
+                <span className="block text-[11px] text-slate-400">Siguiente →</span>
+                <span className="block truncate text-sm font-medium text-slate-700 group-hover:text-emerald-700">
+                  {next.title}
+                </span>
+              </Link>
+            )
           ) : (
             <span className="flex-1" />
           )}
