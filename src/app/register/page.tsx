@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { RegisterForm } from "@/components/RegisterForm";
-import { REDIRECT_PARAM, resolveRedirectTo } from "@/lib/auth-redirect";
+import { DEFAULT_AFTER_LOGIN, REDIRECT_PARAM, sanitizeRedirectTo } from "@/lib/auth-redirect";
 
 interface RegisterPageProps {
   searchParams: {
@@ -15,9 +15,13 @@ interface RegisterPageProps {
  * Página de registro (Server Component).
  * Sanea el `redirectTo` de la URL y se lo pasa al formulario; si ya hay sesión,
  * manda al usuario directo a su destino.
+ *
+ * Aquí NO se rellena el destino por defecto: si no venía uno explícito se pasa
+ * vacío para que la Server Action aplique el suyo (el test de diagnóstico, primer
+ * paso del onboarding). Quien llegó desde una lección concreta conserva su ruta.
  */
 export default async function RegisterPage({ searchParams }: RegisterPageProps) {
-  const target = resolveRedirectTo(searchParams[REDIRECT_PARAM]);
+  const target = sanitizeRedirectTo(searchParams[REDIRECT_PARAM]);
 
   const supabase = await createClient();
   const {
@@ -25,7 +29,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
   } = await supabase.auth.getUser();
 
   if (user) {
-    redirect(target);
+    redirect(target ?? DEFAULT_AFTER_LOGIN);
   }
 
   return (
@@ -43,7 +47,7 @@ export default async function RegisterPage({ searchParams }: RegisterPageProps) 
           </p>
         </div>
 
-        <RegisterForm redirectTo={target} />
+        <RegisterForm redirectTo={target ?? ""} />
 
         <p className="mt-4 text-center text-sm text-slate-500">
           <Link href="/" className="font-medium text-slate-500 hover:text-slate-700">

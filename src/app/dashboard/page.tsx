@@ -13,7 +13,7 @@ import {
 } from "@/lib/progression";
 import { getSubscription, hasPremiumAccess } from "@/lib/subscription";
 import { loginPath } from "@/lib/auth-redirect";
-import type { LessonProgress } from "@/lib/types";
+import type { FinancialLevel, LessonProgress } from "@/lib/types";
 
 interface DashboardPageProps {
   /** `?bloqueada=<slug>`: llega así quien intentó abrir una lección con candado. */
@@ -63,8 +63,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     redirect(loginPath("/dashboard"));
   }
 
-  const [{ data }, subscription] = await Promise.all([
+  const [{ data }, { data: profile }, subscription] = await Promise.all([
     supabase.from("lesson_progress").select("lesson_id, status, completed_at, quiz_score"),
+    supabase.from("profiles").select("financial_level").eq("id", user.id).maybeSingle(),
     getSubscription(supabase, user.id),
   ]);
 
@@ -98,6 +99,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       unlockedSlugs={[...unlocked]}
       premiumLockedSlugs={[...premiumLocked]}
       isPremium={isPremium}
+      financialLevel={(profile?.financial_level ?? null) as FinancialLevel | null}
       initialCategory={blocked && showNotice ? blocked.module.category : undefined}
       lockedNotice={lockedNotice}
       userEmail={user.email ?? ""}

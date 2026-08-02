@@ -3,8 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 import { DashboardNav } from "@/components/DashboardNav";
+import { DIAGNOSTIC_PATH, LEVEL_LABELS } from "@/lib/diagnostic";
 import type { Category } from "@/lib/curriculum";
-import type { LessonProgress, LessonStatus } from "@/lib/types";
+import type { FinancialLevel, LessonProgress, LessonStatus } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
 // Datos que necesita la vista
@@ -144,6 +145,11 @@ interface DashboardProps {
   premiumLockedSlugs: string[];
   /** True si el usuario tiene membresía activa (oculta la llamada a suscribirse). */
   isPremium: boolean;
+  /**
+   * Nivel del Test de Diagnóstico. Si es `null` el estudiante aún no lo ha hecho
+   * y la ruta abre con la invitación a hacerlo (es el primer paso del onboarding).
+   */
+  financialLevel: FinancialLevel | null;
   /** Pestaña abierta al cargar (por defecto, Finanzas Personales). */
   initialCategory?: Category;
   /** Aviso a mostrar si el usuario llegó desde una lección bloqueada. */
@@ -187,6 +193,7 @@ export function Dashboard({
   unlockedSlugs,
   premiumLockedSlugs,
   isPremium,
+  financialLevel,
   initialCategory,
   lockedNotice,
   userEmail,
@@ -255,6 +262,41 @@ export function Dashboard({
       <DashboardNav active="ruta" />
 
       <main className="mx-auto max-w-3xl px-4 py-6">
+        {/* Test de diagnóstico. Sin nivel medido es lo primero que se ve: de él
+            depende cómo te explica el tutor. Ya medido, queda como un chip
+            discreto con la puerta a repetirlo. */}
+        {financialLevel === null ? (
+          <Link
+            href={DIAGNOSTIC_PATH}
+            className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white px-4 py-3 transition hover:border-emerald-300 hover:shadow-sm"
+          >
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-emerald-900">
+                🧭 Aún no conocemos tu nivel
+              </p>
+              <p className="text-xs text-emerald-800">
+                Haz el test de diagnóstico (desde 2 minutos) y el tutor adaptará sus
+                explicaciones a lo que ya sabes.
+              </p>
+            </div>
+            <span className="flex-none rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white">
+              Empezar test <span aria-hidden="true">→</span>
+            </span>
+          </Link>
+        ) : (
+          <div className="mb-4 flex flex-wrap items-center gap-2 px-1">
+            <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800">
+              Tu nivel: {LEVEL_LABELS[financialLevel]}
+            </span>
+            <Link
+              href={DIAGNOSTIC_PATH}
+              className="text-xs font-medium text-slate-500 underline underline-offset-2 transition hover:text-emerald-700"
+            >
+              Repetir test de diagnóstico
+            </Link>
+          </div>
+        )}
+
         {/* Llamada a suscribirse: solo para quien aún no tiene membresía */}
         {!isPremium && (
           <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white px-4 py-3">

@@ -112,3 +112,22 @@ export interface QuizResult {
   total: number;
   perQuestion: QuizQuestionResult[];
 }
+
+// ---------------------------------------------------------------------------
+// Test de Diagnóstico de entrada
+// ---------------------------------------------------------------------------
+
+/**
+ * Resultado de un intento del test de diagnóstico, calculado por el servidor
+ * contra el pool de `lib/diagnostic.ts` (el cliente solo manda qué respondió).
+ * El nivel ya quedó guardado en `profiles.financial_level` cuando esto vuelve.
+ */
+export interface DiagnosticResult {
+  correctCount: number;
+  total: number;
+  /** Aciertos en porcentaje (0–100), redondeado. */
+  accuracy: number;
+  level: FinancialLevel;
+  /** Ids de las preguntas falladas, para repasarlas en la pantalla de resultado. */
+  wrongQuestionIds: string[];
+}

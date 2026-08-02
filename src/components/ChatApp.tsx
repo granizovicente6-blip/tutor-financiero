@@ -13,7 +13,7 @@ import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { createClient } from "@/lib/supabase/client";
 import { signOut } from "@/app/auth/actions";
-import { updateFinancialLevel } from "@/app/profile/actions";
+import { DIAGNOSTIC_PATH, LEVEL_LABELS } from "@/lib/diagnostic";
 import type { ChatMessage, Conversation, FinancialLevel, StreakInfo } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
@@ -27,12 +27,6 @@ const WELCOME_MESSAGE: ChatMessage = {
 
 const ERROR_MESSAGE =
   "⚠️ Lo siento, ha ocurrido un problema al generar la respuesta. Por favor, inténtalo de nuevo en unos segundos.";
-
-const LEVEL_LABELS: Record<FinancialLevel, string> = {
-  beginner: "Principiante",
-  intermediate: "Intermedio",
-  advanced: "Avanzado",
-};
 
 // ---------------------------------------------------------------------------
 // Render de Markdown (respuestas del tutor) con estilos Tailwind
@@ -118,7 +112,11 @@ function TypingIndicator(): ReactNode {
 interface ChatAppProps {
   initialConversations: Conversation[];
   userEmail: string;
-  initialLevel: FinancialLevel | null;
+  /**
+   * Nivel del perfil, salido del Test de Diagnóstico (`/diagnostico`). Es solo
+   * de lectura: aquí ya no se elige a mano, se muestra y se enlaza al test.
+   */
+  level: FinancialLevel | null;
   /** Racha de estudio; se renderiza directo desde props para reflejar cambios. */
   streak: StreakInfo;
   /** True si la membresía está activa: cambia el CTA por un distintivo. */
@@ -128,7 +126,7 @@ interface ChatAppProps {
 export function ChatApp({
   initialConversations,
   userEmail,
-  initialLevel,
+  level,
   streak,
   isPremium,
 }: ChatAppProps) {
@@ -140,8 +138,6 @@ export function ChatApp({
   const [input, setInput] = useState<string>("");
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(false);
-  const [level, setLevel] = useState<FinancialLevel | null>(initialLevel);
-  const [savingLevel, setSavingLevel] = useState<boolean>(false);
 
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
@@ -155,18 +151,6 @@ export function ChatApp({
       .select("id, title, created_at")
       .order("created_at", { ascending: false });
     if (data) setConversations(data as Conversation[]);
-  }
-
-  async function changeLevel(next: FinancialLevel): Promise<void> {
-    if (next === level || savingLevel) return;
-    const previous = level;
-    setLevel(next); // actualización optimista
-    setSavingLevel(true);
-    const result = await updateFinancialLevel(next);
-    setSavingLevel(false);
-    if (!result.ok) {
-      setLevel(previous); // revertir si falló
-    }
   }
 
   function startNewChat(): void {
@@ -409,35 +393,40 @@ export function ChatApp({
           )}
         </nav>
 
-        {/* Selector de nivel de conocimiento financiero */}
+        {/* Nivel de conocimiento. Ya no se elige a mano: sale del Test de
+            Diagnóstico, así que aquí solo se muestra y se enlaza al test. */}
         <div className="border-t border-slate-200 p-3">
-          <label
-            htmlFor="financial-level"
-            className="mb-1 block px-1 text-xs font-medium text-slate-500"
-          >
-            Nivel de conocimiento
-            {savingLevel && <span className="text-slate-400"> · guardando…</span>}
-          </label>
-          <select
-            id="financial-level"
-            value={level ?? ""}
-            disabled={savingLevel}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (value) void changeLevel(value as FinancialLevel);
-            }}
-            className="w-full rounded-lg border border-slate-300 bg-slate-50 px-2 py-1.5 text-sm text-slate-700 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200 disabled:opacity-60"
-          >
-            <option value="" disabled>
-              Selecciona tu nivel…
-            </option>
-            <option value="beginner">Principiante</option>
-            <option value="intermediate">Intermedio</option>
-            <option value="advanced">Avanzado</option>
-          </select>
-          <p className="mt-1 px-1 text-[11px] leading-snug text-slate-400">
-            El tutor adapta sus explicaciones a tu nivel.
-          </p>
+          {level ? (
+            <>
+              <p className="mb-1 px-1 text-xs font-medium text-slate-500">
+                Nivel de conocimiento
+              </p>
+              <div className="flex items-center justify-between gap-2 rounded-lg bg-emerald-50 px-3 py-2">
+                <span className="text-sm font-semibold text-emerald-800">
+                  {LEVEL_LABELS[level]}
+                </span>
+                <Link
+                  href={DIAGNOSTIC_PATH}
+                  className="flex-none text-[11px] font-medium text-emerald-700 underline underline-offset-2 hover:text-emerald-900"
+                >
+                  Repetir test
+                </Link>
+              </div>
+              <p className="mt-1 px-1 text-[11px] leading-snug text-slate-400">
+                El tutor adapta sus explicaciones a tu nivel.
+              </p>
+            </>
+          ) : (
+            <Link
+              href={DIAGNOSTIC_PATH}
+              className="block rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2.5 transition hover:border-emerald-300 hover:bg-emerald-100"
+            >
+              <p className="text-sm font-semibold text-emerald-800">🧭 Haz tu test de nivel</p>
+              <p className="mt-0.5 text-[11px] leading-snug text-emerald-700/80">
+                2 minutos y el tutor adapta sus explicaciones a lo que ya sabes.
+              </p>
+            </Link>
+          )}
         </div>
 
         {/* Usuario + cerrar sesión */}

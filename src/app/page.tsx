@@ -60,7 +60,7 @@ export default async function Home() {
     <ChatApp
       initialConversations={(conversations ?? []) as Conversation[]}
       userEmail={user.email ?? ""}
-      initialLevel={(profile?.financial_level ?? null) as FinancialLevel | null}
+      level={(profile?.financial_level ?? null) as FinancialLevel | null}
       streak={streak}
       isPremium={hasPremiumAccess(subscription)}
     />

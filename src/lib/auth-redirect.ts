@@ -11,13 +11,28 @@
 // =============================================================================
 
 /**
- * Prefijos de ruta que exigen sesión: la ruta de aprendizaje y los simuladores.
- * Cubren también sus subrutas (`/dashboard/<slug>`, `/simuladores/<tool>`).
+ * Prefijos de ruta que exigen sesión: la ruta de aprendizaje, los simuladores y
+ * el test de diagnóstico (escribe en el perfil). Cubren también sus subrutas
+ * (`/dashboard/<slug>`, `/simuladores/<tool>`).
+ *
+ * "/diagnostico" va literal y no importado de `lib/diagnostic` a propósito: este
+ * módulo lo carga el middleware, y no queremos arrastrar el pool de preguntas al
+ * bundle del edge.
  */
-export const PROTECTED_PREFIXES = ["/dashboard", "/simuladores"] as const;
+export const PROTECTED_PREFIXES = ["/dashboard", "/simuladores", "/diagnostico"] as const;
 
 /** Destino por defecto tras iniciar sesión si no viene un `redirectTo` válido. */
 export const DEFAULT_AFTER_LOGIN = "/dashboard";
+
+/**
+ * Destino por defecto tras CREAR la cuenta: el test de diagnóstico. Es el primer
+ * paso del onboarding —sustituye a la antigua pregunta "¿cuál es tu nivel?"— y
+ * de él sale el nivel con el que el tutor adapta sus explicaciones.
+ *
+ * Solo aplica cuando el registro no arrastraba un destino explícito: si alguien
+ * llegó desde una lección concreta, se respeta a dónde quería ir.
+ */
+export const DEFAULT_AFTER_REGISTER = "/diagnostico";
 
 /** Nombre del parámetro que transporta el destino a través del login. */
 export const REDIRECT_PARAM = "redirectTo";

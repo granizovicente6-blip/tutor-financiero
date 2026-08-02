@@ -44,7 +44,7 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   const { pathname, search } = request.nextUrl;
 
   // Modelo guest-first: el sitio es público salvo el área de producto
-  // (`/dashboard`, `/simuladores`). La portada, `/pricing`, las páginas
+  // (`/dashboard`, `/simuladores`, `/diagnostico`). La portada, `/pricing`, las páginas
   // informativas y las de auth se visitan sin cuenta; las rutas de API se
   // autoprotegen devolviendo 401 en vez de redirigir.
   if (!user && isProtectedPath(pathname)) {
