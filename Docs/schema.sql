@@ -34,8 +34,23 @@ create table if not exists public.profiles (
   current_streak   int         not null default 0,
   longest_streak   int         not null default 0,
   last_active_date date,
+  -- Suscripción de Mercado Pago (Fase 7). Los nuevos usuarios entran en 'free'
+  -- por el DEFAULT: handle_new_user() solo inserta (id, email).
+  subscription_status text     not null default 'free'
+                 check (subscription_status in ('free', 'active', 'cancelled', 'pending')),
+  -- ID de la suscripción (preapproval) en Mercado Pago: clave de conciliación
+  -- del webhook, que no tiene sesión de usuario.
+  mp_preapproval_id  text,
+  mp_payer_id        text,
+  -- Fin del período ya pagado (el acceso se mantiene hasta esa fecha).
+  current_period_end timestamptz,
   created_at       timestamptz not null default now()
 );
+
+-- Búsqueda por preapproval_id desde el webhook.
+create unique index if not exists profiles_mp_preapproval_id_idx
+  on public.profiles (mp_preapproval_id)
+  where mp_preapproval_id is not null;
 
 -- -----------------------------------------------------------------------------
 -- Tabla: conversations
@@ -113,6 +128,41 @@ create policy "profiles_update_own"
   on public.profiles for update
   using (auth.uid() = id)
   with check (auth.uid() = id);
+
+-- --- profiles: las columnas de suscripción solo las gestiona el servidor -------
+-- "profiles_update_own" no distingue columnas, así que sin este trigger un
+-- usuario podría escribir subscription_status = 'active' desde el navegador y
+-- saltarse el muro de pago. Los cambios que no vengan del rol de servicio (o de
+-- un administrador de la BD) se revierten en silencio. Ver migración 006.
+create or replace function public.protect_subscription_columns()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_jwt_role text;
+begin
+  v_jwt_role := nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role';
+
+  if v_jwt_role = 'service_role'
+     or current_user in ('service_role', 'postgres', 'supabase_admin')
+  then
+    return new;
+  end if;
+
+  new.subscription_status := old.subscription_status;
+  new.mp_preapproval_id   := old.mp_preapproval_id;
+  new.mp_payer_id         := old.mp_payer_id;
+  new.current_period_end  := old.current_period_end;
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_protect_subscription on public.profiles;
+create trigger profiles_protect_subscription
+  before update on public.profiles
+  for each row execute function public.protect_subscription_columns();
 
 -- --- conversations: el usuario solo accede a sus propias conversaciones ---------
 drop policy if exists "conversations_select_own" on public.conversations;

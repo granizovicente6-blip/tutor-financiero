@@ -135,6 +135,14 @@ interface DashboardProps {
    * `lib/progression`. El resto se muestra con candado y sin enlace.
    */
   unlockedSlugs: string[];
+  /**
+   * Lecciones bloqueadas por falta de suscripción. Se distinguen de las
+   * bloqueadas por avance: estas no se abren estudiando, sino suscribiéndose,
+   * así que llevan a /pricing en vez de mostrar "completa la anterior".
+   */
+  premiumLockedSlugs: string[];
+  /** True si el usuario tiene membresía activa (oculta la llamada a suscribirse). */
+  isPremium: boolean;
   /** Pestaña abierta al cargar (por defecto, Finanzas Personales). */
   initialCategory?: Category;
   /** Aviso a mostrar si el usuario llegó desde una lección bloqueada. */
@@ -176,6 +184,8 @@ export function Dashboard({
   categories,
   progress,
   unlockedSlugs,
+  premiumLockedSlugs,
+  isPremium,
   initialCategory,
   lockedNotice,
   userEmail,
@@ -189,6 +199,11 @@ export function Dashboard({
     progress.map((p) => [p.lesson_id, p.status]),
   );
   const unlocked = new Set(unlockedSlugs);
+  const premiumLocked = new Set(premiumLockedSlugs);
+  const totalLessons = categories.reduce(
+    (total, cat) => total + categoryLessons(cat).length,
+    0,
+  );
 
   // Si la categoría por defecto no existiera en los datos, caemos en la primera.
   const section =
@@ -210,16 +225,54 @@ export function Dashboard({
               Mi ruta de aprendizaje
             </h1>
           </div>
-          <Link
-            href="/"
-            className="rounded-lg px-3 py-1.5 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50"
-          >
-            ← Volver al chat
-          </Link>
+          <div className="flex items-center gap-1">
+            {isPremium ? (
+              <span
+                className="rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900"
+                title="Membresía Premium activa"
+              >
+                👑 Premium
+              </span>
+            ) : (
+              <Link
+                href="/pricing"
+                className="rounded-lg px-3 py-1.5 text-sm font-medium text-amber-700 transition hover:bg-amber-50"
+              >
+                👑 Premium
+              </Link>
+            )}
+            <Link
+              href="/"
+              className="rounded-lg px-3 py-1.5 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50"
+            >
+              ← Volver al chat
+            </Link>
+          </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-6">
+        {/* Llamada a suscribirse: solo para quien aún no tiene membresía */}
+        {!isPremium && (
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white px-4 py-3">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-amber-900">
+                👑 Estás en el plan gratuito
+              </p>
+              <p className="text-xs text-amber-800">
+                Desbloquea las {totalLessons} lecciones del programa con la Membresía
+                Premium.
+              </p>
+            </div>
+            <Link
+              href="/pricing"
+              className="flex-none rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-600"
+            >
+              Ver planes <span aria-hidden="true">→</span>
+            </Link>
+          </div>
+        )}
+
         {/* Aviso: llegó aquí por intentar abrir una lección bloqueada */}
         {lockedNotice && (
           <div
@@ -315,6 +368,7 @@ export function Dashboard({
               ) : (
                 <p className="mt-2 text-xs text-slate-500">
                   Las lecciones se desbloquean en orden: completa una para abrir la siguiente.
+                  {!isPremium && " Las marcadas con 👑 requieren Membresía Premium."}
                 </p>
               )}
             </div>
@@ -343,6 +397,44 @@ export function Dashboard({
                     const status = statusBySlug.get(lesson.slug) ?? "not_started";
                     const statusMeta = STATUS_META[status];
                     const isUnlocked = unlocked.has(lesson.slug);
+
+                    // ----- Lección de pago: enlaza a /pricing, no a la lección.
+                    // No se atenúa como las bloqueadas por avance: aquí sí hay
+                    // una acción que el estudiante puede tomar ahora mismo.
+                    if (!isUnlocked && premiumLocked.has(lesson.slug)) {
+                      return (
+                        <li key={lesson.slug}>
+                          <Link
+                            href={`/pricing?leccion=${encodeURIComponent(lesson.slug)}`}
+                            title="Disponible con la Membresía Premium"
+                            className="group flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50/50 px-4 py-3 transition hover:border-amber-300 hover:bg-amber-50"
+                          >
+                            <span className="flex-none text-sm" aria-hidden="true">
+                              👑
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-medium text-slate-600">
+                                {lesson.title}
+                              </p>
+                              <p className="truncate text-xs text-slate-500">
+                                {lesson.summary}
+                              </p>
+                              <div className="mt-1.5 flex items-center gap-2">
+                                <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-medium text-amber-900">
+                                  Membresía Premium 👑
+                                </span>
+                                <span className="text-[11px] text-slate-400">
+                                  {lesson.estimatedMinutes} min
+                                </span>
+                              </div>
+                            </div>
+                            <span className="flex-none rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition group-hover:bg-amber-600">
+                              Suscribirme <span aria-hidden="true">→</span>
+                            </span>
+                          </Link>
+                        </li>
+                      );
+                    }
 
                     // ----- Lección bloqueada: sin enlace, atenuada y con candado.
                     if (!isUnlocked) {

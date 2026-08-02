@@ -8,9 +8,10 @@ import {
 import { getLessonBySlug, getModulesGroupedByCategory } from "@/lib/curriculum";
 import {
   buildStatusMap,
+  getLessonAccess,
   getPreviousLessonInCategory,
-  getUnlockedLessonSlugs,
 } from "@/lib/progression";
+import { getSubscription, hasPremiumAccess } from "@/lib/subscription";
 import type { LessonProgress } from "@/lib/types";
 
 interface DashboardPageProps {
@@ -61,20 +62,25 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     redirect("/login");
   }
 
-  const { data } = await supabase
-    .from("lesson_progress")
-    .select("lesson_id, status, completed_at, quiz_score");
+  const [{ data }, subscription] = await Promise.all([
+    supabase.from("lesson_progress").select("lesson_id, status, completed_at, quiz_score"),
+    getSubscription(supabase, user.id),
+  ]);
 
   const progress = (data ?? []) as LessonProgress[];
   const statusBySlug = buildStatusMap(progress);
-  const unlockedSlugs = getUnlockedLessonSlugs(statusBySlug);
+  const isPremium = hasPremiumAccess(subscription);
+  // Dos conjuntos distintos: lo que puede abrir y lo que exige membresía. El
+  // dashboard los pinta con candados diferentes (🔒 estudiar vs 👑 suscribirse).
+  const { unlocked, premiumLocked } = getLessonAccess(statusBySlug, isPremium);
 
   // Aviso cuando se intentó entrar por URL a una lección aún bloqueada. Se
   // vuelve a verificar el candado aquí: el parámetro viene de la URL y no es
-  // de fiar por sí solo.
+  // de fiar por sí solo. (Las bloqueadas por suscripción no llegan aquí: la
+  // página de la lección las manda a /pricing.)
   const blockedSlug = searchParams.bloqueada;
   const blocked = blockedSlug ? getLessonBySlug(blockedSlug) : null;
-  const showNotice = blocked !== null && !unlockedSlugs.has(blocked.lesson.slug);
+  const showNotice = blocked !== null && !unlocked.has(blocked.lesson.slug);
 
   const lockedNotice: LockedNotice | null =
     blocked && showNotice
@@ -88,7 +94,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
     <Dashboard
       categories={getCategorySections()}
       progress={progress}
-      unlockedSlugs={[...unlockedSlugs]}
+      unlockedSlugs={[...unlocked]}
+      premiumLockedSlugs={[...premiumLocked]}
+      isPremium={isPremium}
       initialCategory={blocked && showNotice ? blocked.module.category : undefined}
       lockedNotice={lockedNotice}
       userEmail={user.email ?? ""}

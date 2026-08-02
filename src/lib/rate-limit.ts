@@ -13,10 +13,15 @@ import type { createClient } from "@/lib/supabase/server";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
-/** Rutas de API sujetas a rate limiting (deben coincidir con la función SQL). */
+/**
+ * Rutas de API sujetas a rate limiting (deben coincidir con la función SQL).
+ * Las que no estén listadas en `check_rate_limit` usan el tope por defecto
+ * (30/min), suficiente para la creación de suscripciones.
+ */
 export const API_ROUTES = {
   chat: "/api/chat",
   quizFeedback: "/api/quiz/feedback",
+  createSubscription: "/api/mercadopago/create-subscription",
 } as const;
 
 export interface RateLimitResult {

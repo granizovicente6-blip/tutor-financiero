@@ -31,7 +31,35 @@ export interface StreakInfo {
 }
 
 /** Tipos de evento de analítica registrados (métricas de éxito, Fase 6). */
-export type AnalyticsEventType = "lesson_completed" | "quiz_completed";
+export type AnalyticsEventType =
+  | "lesson_completed"
+  | "quiz_completed"
+  | "subscription_checkout_started"
+  | "subscription_activated"
+  | "subscription_cancelled";
+
+// ---------------------------------------------------------------------------
+// Suscripción (Fase 7)
+// ---------------------------------------------------------------------------
+
+/**
+ * Estado de la suscripción del usuario (columna `profiles.subscription_status`).
+ *
+ * - `free`      — sin suscripción; solo el contenido de prueba.
+ * - `pending`   — inició el checkout, falta la confirmación de Mercado Pago.
+ * - `active`    — suscripción autorizada y al día; acceso completo.
+ * - `cancelled` — cancelada o con pago fallido; vuelve al contenido gratuito.
+ */
+export type SubscriptionStatus = "free" | "active" | "cancelled" | "pending";
+
+/** Suscripción del usuario tal como la lee la app (subset de `profiles`). */
+export interface SubscriptionInfo {
+  status: SubscriptionStatus;
+  /** ID de la suscripción en Mercado Pago (null si nunca inició el checkout). */
+  preapprovalId: string | null;
+  /** Fin del período ya pagado, en ISO 8601 (null si no aplica). */
+  currentPeriodEnd: string | null;
+}
 
 // ---------------------------------------------------------------------------
 // Ruta de aprendizaje y progreso (Fase 4)

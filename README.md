@@ -50,6 +50,16 @@ tutor-financiero/
 └─ package.json
 ```
 
+## Suscripciones (Mercado Pago · Chile)
+
+La Membresía Premium ($9.900 CLP/mes) desbloquea las 86 lecciones. Puesta en
+marcha, configuración del webhook y reglas del muro de pago:
+**[`Docs/MERCADOPAGO.md`](Docs/MERCADOPAGO.md)**.
+
+Requiere aplicar `Docs/migrations/006_add_subscriptions.sql` y configurar
+`MERCADOPAGO_ACCESS_TOKEN`, `NEXT_PUBLIC_MERCADOPAGO_PUBLIC_KEY`,
+`MERCADOPAGO_WEBHOOK_SECRET` y `SUPABASE_SERVICE_ROLE_KEY` (ver `.env.example`).
+
 ## Notas técnicas
 
 - El modelo por defecto es `claude-sonnet-5` (constante `MODEL` en `route.ts`).
