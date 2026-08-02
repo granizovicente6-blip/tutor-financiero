@@ -1,6 +1,14 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import Link from "next/link";
 import {
   ArrowRight,
@@ -16,6 +24,7 @@ import {
   PieChart,
   PiggyBank,
   Receipt,
+  RotateCcw,
   ShieldCheck,
   Sparkles,
   Timer,
@@ -46,11 +55,27 @@ import {
   UTM_CLP,
   type FreedomVerdict,
   type ProjectionInput,
-  type RiskProfileKey,
 } from "@/lib/portfolio";
+import {
+  defaultSimulatorPrefs,
+  readSimulatorPrefs,
+  writeSimulatorPrefs,
+  MAX_INITIAL_CLP,
+  MAX_MONTHLY_CLP,
+  type SimulatorPrefs,
+} from "@/lib/simulator-prefs";
 
-/** Tope del slider de aporte mensual (también acota el aporte sugerido). */
-const MAX_MONTHLY_CLP = 5_000_000;
+/**
+ * `useLayoutEffect` en el cliente, `useEffect` en el servidor.
+ *
+ * Restaurar las preferencias en un efecto de layout aplica los valores
+ * guardados ANTES de que el navegador pinte el resultado de la hidratación, de
+ * modo que no se ve el salto de los valores por defecto a los del usuario. En
+ * el servidor `useLayoutEffect` no hace nada y React avisaría por consola, así
+ * que allí se usa `useEffect` (que tampoco corre en SSR, pero no protesta).
+ */
+const useIsomorphicLayoutEffect =
+  typeof window === "undefined" ? useEffect : useLayoutEffect;
 
 /**
  * Capital que sostiene una jubilación sólida: la meta IMPLÍCITA del simulador.
@@ -279,11 +304,56 @@ export function PortfolioSimulator({
   priceLabel,
   currentYear,
 }: PortfolioSimulatorProps): ReactNode {
-  const [initialClp, setInitialClp] = useState(2_000_000);
-  const [monthlyClp, setMonthlyClp] = useState(200_000);
-  const [years, setYears] = useState(isPremium ? 25 : FREE_MAX_YEARS);
-  const [riskKey, setRiskKey] = useState<RiskProfileKey>(FREE_RISK_PROFILE);
+  /**
+   * Los cuatro parámetros persistentes viajan en UN solo objeto: así lo que se
+   * renderiza, lo que se guarda y lo que se restaura son la misma pieza, y no
+   * hay que coordinar cuatro `useState` con el almacenamiento.
+   *
+   * Arranca SIEMPRE en los valores por defecto, nunca leyendo `localStorage`
+   * aquí: el servidor no tiene acceso a él y cualquier diferencia entre el HTML
+   * del servidor y el primer render del cliente sería un desajuste de
+   * hidratación. Lo guardado se aplica justo después, en el efecto de abajo.
+   */
+  const [params, setParams] = useState<SimulatorPrefs>(() =>
+    defaultSimulatorPrefs(isPremium),
+  );
   const [marginalRatePct, setMarginalRatePct] = useState(8);
+
+  const { initialClp, monthlyClp, years, riskKey } = params;
+
+  /**
+   * Falso hasta que se ha intentado leer lo guardado.
+   *
+   * Es el seguro contra el fallo clásico de este patrón: sin él, el efecto que
+   * guarda se dispararía en el primer render y escribiría los valores por
+   * defecto ENCIMA de las preferencias del usuario antes de haberlas leído.
+   */
+  const restoredRef = useRef(false);
+
+  // Restaurar: en un efecto de layout para que los valores del usuario estén
+  // aplicados antes del primer pintado tras la hidratación (sin parpadeo).
+  useIsomorphicLayoutEffect(() => {
+    const saved = readSimulatorPrefs(defaultSimulatorPrefs(isPremium));
+    if (saved) setParams(saved);
+    restoredRef.current = true;
+  }, [isPremium]);
+
+  // Guardar: en cada cambio, ya con la restauración hecha.
+  useEffect(() => {
+    if (!restoredRef.current) return;
+    writeSimulatorPrefs(params);
+  }, [params]);
+
+  const updateParams = useCallback((patch: Partial<SimulatorPrefs>) => {
+    setParams((prev) => ({ ...prev, ...patch }));
+  }, []);
+
+  const resetParams = useCallback(() => {
+    setParams(defaultSimulatorPrefs(isPremium));
+  }, [isPremium]);
+
+  const isPristine =
+    JSON.stringify(params) === JSON.stringify(defaultSimulatorPrefs(isPremium));
 
   const maxYears = isPremium ? PREMIUM_MAX_YEARS : FREE_MAX_YEARS;
 
@@ -351,20 +421,33 @@ export function PortfolioSimulator({
         <div className="flex flex-col gap-4 lg:sticky lg:top-6 lg:h-[calc(100vh-4rem)] lg:overflow-y-auto lg:pb-4 lg:pr-1">
           {/* --- Aportes y horizonte --- */}
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="mb-4 flex items-center gap-1.5 text-sm font-semibold text-slate-900">
-              <Wallet className="h-4 w-4 text-emerald-600" aria-hidden="true" />
-              Tus aportes
-            </h2>
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <h2 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+                <Wallet className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+                Tus aportes
+              </h2>
+              {!isPristine && (
+                <button
+                  type="button"
+                  onClick={resetParams}
+                  title="Volver a los valores por defecto"
+                  className="flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                >
+                  <RotateCcw className="h-3 w-3" aria-hidden="true" />
+                  Restablecer
+                </button>
+              )}
+            </div>
             <div className="flex flex-col gap-5">
               <MoneyField
                 label="Capital inicial"
                 icon={<PiggyBank className="h-3.5 w-3.5" aria-hidden="true" />}
                 value={initialClp}
                 min={0}
-                max={200_000_000}
+                max={MAX_INITIAL_CLP}
                 step={100_000}
                 hint={`${formatClp(initialClp)} · ${formatClpAsUf(initialClp)}`}
-                onChange={setInitialClp}
+                onChange={(value) => updateParams({ initialClp: value })}
               />
               <MoneyField
                 label="Aporte mensual"
@@ -374,7 +457,7 @@ export function PortfolioSimulator({
                 max={MAX_MONTHLY_CLP}
                 step={10_000}
                 hint={`${formatClp(monthlyClp)} al mes · ${formatClpAsUf(monthlyClp)}`}
-                onChange={setMonthlyClp}
+                onChange={(value) => updateParams({ monthlyClp: value })}
               />
               <div>
                 <MoneyField
@@ -388,7 +471,7 @@ export function PortfolioSimulator({
                   hint={`${effectiveYears} ${effectiveYears === 1 ? "año" : "años"} · hasta ${
                     currentYear + effectiveYears
                   }`}
-                  onChange={setYears}
+                  onChange={(value) => updateParams({ years: value })}
                 />
                 {!isPremium && (
                   <p className="mt-1.5 flex items-start gap-1.5 rounded-lg bg-amber-50 px-2 py-1.5 text-[11px] leading-snug text-amber-800">
@@ -426,7 +509,7 @@ export function PortfolioSimulator({
                     type="button"
                     disabled={locked}
                     aria-pressed={isActive}
-                    onClick={() => setRiskKey(item.key)}
+                    onClick={() => updateParams({ riskKey: item.key })}
                     className={`rounded-xl border px-3 py-2.5 text-left transition ${
                       isActive
                         ? "border-emerald-500 bg-emerald-50 ring-1 ring-emerald-200"
@@ -476,6 +559,10 @@ export function PortfolioSimulator({
               <strong>regla del {SAFE_WITHDRAWAL_RATE * 100}%</strong> el simulador traduce tu
               patrimonio a la renta mensual que podrías retirar de por vida, y la compara con
               una jubilación sólida de {formatClp(SOLID_RETIREMENT_INCOME_CLP)} de hoy.
+            </p>
+            <p className="mt-2 border-t border-slate-100 pt-2 text-[11px] leading-relaxed text-slate-400">
+              Tus parámetros se guardan en este navegador, así que al volver los encuentras
+              como los dejaste.
             </p>
           </section>
         </div>
@@ -661,7 +748,7 @@ export function PortfolioSimulator({
                 {suggestionFitsSlider ? (
                   <button
                     type="button"
-                    onClick={() => setMonthlyClp(suggestedRounded)}
+                    onClick={() => updateParams({ monthlyClp: suggestedRounded })}
                     className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-emerald-700"
                   >
                     <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
