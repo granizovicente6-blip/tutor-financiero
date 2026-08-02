@@ -52,7 +52,7 @@ tutor-financiero/
 
 ## Suscripciones (Mercado Pago · Chile)
 
-La Membresía Premium ($9.900 CLP/mes) desbloquea las 86 lecciones. Puesta en
+La Membresía Premium ($4.990 CLP/mes) desbloquea las 86 lecciones. Puesta en
 marcha, configuración del webhook y reglas del muro de pago:
 **[`Docs/MERCADOPAGO.md`](Docs/MERCADOPAGO.md)**.
 

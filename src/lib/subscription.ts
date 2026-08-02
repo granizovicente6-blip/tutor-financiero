@@ -18,19 +18,23 @@ type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
 /**
  * Plan Premium mensual. El importe se cobra en pesos chilenos, que no tienen
- * decimales: el monto va como entero (9900 = $9.900 CLP).
+ * decimales: el monto va como entero (4990 = $4.990 CLP).
+ *
+ * Este es el ÚNICO sitio donde vive el precio: la landing, la página de precios
+ * y el `auto_recurring.transaction_amount` que se envía a Mercado Pago lo leen
+ * de aquí, de modo que no puedan desalinearse.
  */
 export const PREMIUM_PLAN = {
   /** Nombre mostrado en la UI y enviado a Mercado Pago como `reason`. */
   name: "Tutor Financiero Premium",
-  amount: 9900,
+  amount: 4990,
   currencyId: "CLP",
   /** Se cobra 1 vez cada `frequencyType`. */
   frequency: 1,
   frequencyType: "months",
 } as const;
 
-/** Precio formateado para la UI ("$9.900"). */
+/** Precio formateado para la UI ("$4.990"). */
 export function formatPlanPrice(amount: number = PREMIUM_PLAN.amount): string {
   return `$${new Intl.NumberFormat("es-CL", { maximumFractionDigits: 0 }).format(amount)}`;
 }

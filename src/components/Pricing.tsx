@@ -15,7 +15,7 @@ export interface PlanBenefit {
 interface PricingProps {
   /** False para el visitante anónimo: la página es pública, el pago no. */
   isAuthenticated: boolean;
-  /** Precio ya formateado ("$9.900"): el formato lo decide el servidor. */
+  /** Precio ya formateado ("$4.990"): el formato lo decide el servidor. */
   priceLabel: string;
   currencyLabel: string;
   planName: string;

@@ -1,7 +1,7 @@
 # Suscripciones con Mercado Pago (Chile · CLP)
 
 Integración de la **Membresía Premium**: suscripción mensual recurrente de
-**$9.900 CLP** que desbloquea las 86 lecciones del programa.
+**$4.990 CLP** que desbloquea las 86 lecciones del programa.
 
 ---
 

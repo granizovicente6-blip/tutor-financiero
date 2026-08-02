@@ -17,7 +17,7 @@ interface LandingProps {
   lessonCount: number;
   moduleCount: number;
   freeLessonCount: number;
-  /** Precio del plan ya formateado por el servidor ("$9.900"). */
+  /** Precio del plan ya formateado por el servidor ("$4.990"). */
   priceLabel: string;
   currencyLabel: string;
 }
