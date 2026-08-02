@@ -268,10 +268,25 @@ create trigger on_auth_user_created
   for each row execute function public.handle_new_user();
 
 -- =============================================================================
--- Función: touch_streak() (Fase 5)
+-- Función: app_today() (migración 008)
+-- El "hoy" de la aplicación: fecha civil en Chile. Único sitio donde vive la
+-- zona horaria, para que las funciones de racha no puedan desalinearse. El cast
+-- desde now() (timestamptz) resuelve solo el horario de verano.
+-- STABLE (no IMMUTABLE): depende de now(), fijo dentro de la transacción.
+-- =============================================================================
+create or replace function public.app_today()
+returns date
+language sql
+stable
+as $$
+  select (now() at time zone 'America/Santiago')::date;
+$$;
+
+-- =============================================================================
+-- Función: touch_streak() (Fase 5, zona horaria en migración 008)
 -- Registra un "día activo" del usuario autenticado y recalcula su racha de
 -- estudio de forma atómica. Devuelve la racha resultante. Frontera del día:
--- current_date del servidor (UTC).
+-- 00:00 hora de Chile (app_today()).
 --   - last_active_date = hoy  -> sin cambios (idempotente en el mismo día)
 --   - last_active_date = ayer -> current_streak + 1 (racha continúa)
 --   - más antiguo o NULL      -> current_streak = 1 (racha empieza/reinicia)
@@ -281,6 +296,7 @@ returns table (current_streak int, longest_streak int, last_active_date date)
 language plpgsql
 as $$
 declare
+  v_today   date := public.app_today();
   v_last    date;
   v_current int;
   v_longest int;
@@ -294,9 +310,9 @@ begin
     return;
   end if;
 
-  if v_last = current_date then
+  if v_last = v_today then
     null;
-  elsif v_last = current_date - 1 then
+  elsif v_last = v_today - 1 then
     v_current := v_current + 1;
   else
     v_current := 1;
@@ -307,10 +323,59 @@ begin
   update public.profiles p
      set current_streak   = v_current,
          longest_streak   = v_longest,
-         last_active_date = current_date
+         last_active_date = v_today
    where p.id = auth.uid();
 
-  return query select v_current, v_longest, current_date;
+  return query select v_current, v_longest, v_today;
+end;
+$$;
+
+-- =============================================================================
+-- Función: get_streak() (Fase 5, migración 008)
+-- La lectura oficial de la racha. touch_streak() solo corre cuando el usuario
+-- completa algo; si deja de estudiar, nadie recalcularía nada y la racha se
+-- quedaría encendida para siempre. Por eso esta función también la EXPIRA de
+-- forma perezosa. Frontera del día: 00:00 hora de Chile (app_today()).
+--   - last_active_date = hoy   -> racha viva, ya cumplida hoy (active_today)
+--   - last_active_date = ayer  -> racha viva, pendiente de hoy
+--   - más antigua o NULL       -> current_streak = 0 (racha rota)
+-- longest_streak nunca se toca: es el récord histórico.
+-- =============================================================================
+create or replace function public.get_streak()
+returns table (
+  current_streak   int,
+  longest_streak   int,
+  last_active_date date,
+  active_today     boolean
+)
+language plpgsql
+as $$
+declare
+  v_today   date := public.app_today();
+  v_last    date;
+  v_current int;
+  v_longest int;
+begin
+  select p.last_active_date, coalesce(p.current_streak, 0), coalesce(p.longest_streak, 0)
+    into v_last, v_current, v_longest
+  from public.profiles p
+  where p.id = auth.uid();
+
+  if not found then
+    return;
+  end if;
+
+  if v_last is null or v_last < v_today - 1 then
+    if v_current <> 0 then
+      update public.profiles p
+         set current_streak = 0
+       where p.id = auth.uid();
+    end if;
+    v_current := 0;
+  end if;
+
+  -- coalesce: con last_active_date NULL la comparación da NULL, no false.
+  return query select v_current, v_longest, v_last, coalesce(v_last = v_today, false);
 end;
 $$;
 

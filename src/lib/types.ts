@@ -24,10 +24,20 @@ export interface AuthState {
   message?: string | null;
 }
 
-/** Racha de estudio del usuario (columnas de `profiles`, Fase 5). */
+/**
+ * Racha de estudio del usuario (columnas de `profiles`, Fase 5), ya validada
+ * contra la fecha de hoy por `lib/streak.ts`: si `current` es 0 la racha se
+ * perdió, no es que la BD no se haya actualizado.
+ */
 export interface StreakInfo {
+  /** Días consecutivos vivos. 0 = sin racha (nunca empezada o ya perdida). */
   current: number;
+  /** Récord histórico. Sobrevive a la expiración. */
   longest: number;
+  /** `true` si ya hubo actividad hoy; si no, la racha está pendiente de hoy. */
+  activeToday: boolean;
+  /** Último día con actividad (`YYYY-MM-DD`, UTC) o `null` si nunca hubo. */
+  lastActiveDate: string | null;
 }
 
 /** Tipos de evento de analítica registrados (métricas de éxito, Fase 6). */

@@ -3,13 +3,14 @@ import { ChatApp } from "@/components/ChatApp";
 import { Landing } from "@/components/Landing";
 import { getCurriculumStats } from "@/lib/curriculum";
 import { getFreeLessonSlugs } from "@/lib/progression";
+import { getStreak } from "@/lib/streak";
 import {
   formatPlanPrice,
   getSubscription,
   hasPremiumAccess,
   PREMIUM_PLAN,
 } from "@/lib/subscription";
-import type { Conversation, FinancialLevel, StreakInfo } from "@/lib/types";
+import type { Conversation, FinancialLevel } from "@/lib/types";
 
 /**
  * Página principal (Server Component). Es pública: la puerta de entrada del
@@ -38,23 +39,22 @@ export default async function Home() {
     );
   }
 
-  const [{ data: conversations }, { data: profile }, subscription] = await Promise.all([
+  // getStreak() no es un SELECT más: valida la racha contra la fecha de hoy y la
+  // reinicia si caducó. Al pasar por aquí en cada carga de la app (y por tanto
+  // justo después de iniciar sesión), una racha abandonada se apaga sola.
+  const [{ data: conversations }, { data: profile }, streak, subscription] = await Promise.all([
     supabase
       .from("conversations")
       .select("id, title, created_at")
       .order("created_at", { ascending: false }),
     supabase
       .from("profiles")
-      .select("financial_level, current_streak, longest_streak")
+      .select("financial_level")
       .eq("id", user.id)
       .maybeSingle(),
+    getStreak(supabase, user.id),
     getSubscription(supabase, user.id),
   ]);
-
-  const streak: StreakInfo = {
-    current: profile?.current_streak ?? 0,
-    longest: profile?.longest_streak ?? 0,
-  };
 
   return (
     <ChatApp

@@ -330,29 +330,57 @@ export function ChatApp({
           </Link>
         </div>
 
-        {/* Resumen de racha */}
+        {/* Resumen de racha. Tres estados, porque significan cosas distintas:
+            cumplida hoy (🔥 encendida), viva pero pendiente de hoy (en riesgo,
+            se pierde a medianoche) y apagada (nunca empezada o ya perdida). */}
         <div className="px-3 pb-1">
-          <div className="rounded-xl border border-orange-100 bg-orange-50 px-3 py-2">
-            {streak.current > 0 ? (
-              <>
-                <p className="flex items-center gap-1.5 text-sm font-semibold text-orange-700">
-                  🔥 {streak.current} {streak.current === 1 ? "día" : "días"} de racha
-                </p>
-                <p className="mt-0.5 text-[11px] text-orange-600/80">
-                  Récord: {streak.longest} {streak.longest === 1 ? "día" : "días"}. ¡Sigue así!
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-600">
-                  🔥 Racha
-                </p>
-                <p className="mt-0.5 text-[11px] text-slate-500">
-                  Completa una lección o quiz para empezarla.
-                </p>
-              </>
-            )}
-          </div>
+          {streak.current > 0 ? (
+            <div
+              className={`rounded-xl border px-3 py-2 ${
+                streak.activeToday
+                  ? "border-orange-100 bg-orange-50"
+                  : "border-dashed border-amber-300 bg-amber-50"
+              }`}
+            >
+              <p
+                className={`flex items-center gap-1.5 text-sm font-semibold ${
+                  streak.activeToday ? "text-orange-700" : "text-amber-700"
+                }`}
+              >
+                <span aria-hidden="true" className={streak.activeToday ? "" : "opacity-60"}>
+                  🔥
+                </span>
+                {streak.current} {streak.current === 1 ? "día" : "días"} de racha
+              </p>
+              <p
+                className={`mt-0.5 text-[11px] ${
+                  streak.activeToday ? "text-orange-600/80" : "text-amber-700/80"
+                }`}
+              >
+                {streak.activeToday
+                  ? `Récord: ${streak.longest} ${
+                      streak.longest === 1 ? "día" : "días"
+                    }. ¡Sigue así!`
+                  : "Completa una lección o quiz hoy para no perderla."}
+              </p>
+            </div>
+          ) : (
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="flex items-center gap-1.5 text-sm font-semibold text-slate-500">
+                <span aria-hidden="true" className="opacity-40 grayscale">
+                  🔥
+                </span>
+                {streak.lastActiveDate ? "Racha apagada" : "Racha"}
+              </p>
+              <p className="mt-0.5 text-[11px] text-slate-500">
+                {streak.lastActiveDate
+                  ? `Pasó más de un día sin actividad. Récord: ${streak.longest} ${
+                      streak.longest === 1 ? "día" : "días"
+                    }. Empieza otra hoy.`
+                  : "Completa una lección o quiz para empezarla."}
+              </p>
+            </div>
+          )}
         </div>
 
         <nav className="flex-1 overflow-y-auto px-2 pb-2">
@@ -472,15 +500,42 @@ export function ChatApp({
                   <span className="hidden sm:inline">Hacerse Premium</span>
                 </Link>
               )}
-              {streak.current > 0 && (
+              {/* Indicador de racha: encendido solo si ya hay actividad hoy.
+                  Apagado (gris) cuando se perdió; el título explica por qué. */}
+              {streak.current > 0 ? (
                 <span
-                  className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-1 text-xs font-semibold text-orange-700"
-                  title={`Racha de ${streak.current} ${
-                    streak.current === 1 ? "día" : "días"
-                  } · récord: ${streak.longest}`}
+                  className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${
+                    streak.activeToday
+                      ? "bg-orange-100 text-orange-700"
+                      : "border border-dashed border-amber-300 bg-amber-50 text-amber-700"
+                  }`}
+                  title={
+                    streak.activeToday
+                      ? `Racha de ${streak.current} ${
+                          streak.current === 1 ? "día" : "días"
+                        } · récord: ${streak.longest}`
+                      : `Racha de ${streak.current} ${
+                          streak.current === 1 ? "día" : "días"
+                        } en riesgo: completa una lección o quiz hoy para no perderla.`
+                  }
                 >
-                  🔥 {streak.current}
+                  <span aria-hidden="true" className={streak.activeToday ? "" : "opacity-60"}>
+                    🔥
+                  </span>
+                  {streak.current}
                 </span>
+              ) : (
+                streak.lastActiveDate !== null && (
+                  <span
+                    className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-400"
+                    title={`Racha apagada: pasó más de un día sin actividad. Récord: ${streak.longest}`}
+                  >
+                    <span aria-hidden="true" className="opacity-40 grayscale">
+                      🔥
+                    </span>
+                    0
+                  </span>
+                )
               )}
               {level && (
                 <span className="hidden items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800 sm:inline-flex">
