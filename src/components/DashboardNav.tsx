@@ -12,11 +12,12 @@ import Link from "next/link";
  */
 
 /** Secciones del área de producto. */
-export type DashboardSection = "ruta" | "mercados" | "simuladores";
+export type DashboardSection = "ruta" | "mercados" | "simulador" | "simuladores";
 
 const ITEMS: { key: DashboardSection; href: string; label: string; emoji: string }[] = [
   { key: "ruta", href: "/dashboard", label: "Mi ruta", emoji: "📚" },
   { key: "mercados", href: "/dashboard/mercados", label: "Mercados / ETFs", emoji: "📈" },
+  { key: "simulador", href: "/dashboard/simulador", label: "Simulador UF", emoji: "📊" },
   { key: "simuladores", href: "/simuladores", label: "Simuladores", emoji: "🧮" },
 ];
 

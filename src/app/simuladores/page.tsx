@@ -20,6 +20,14 @@ interface SimulatorCard {
 
 const SIMULATORS: SimulatorCard[] = [
   {
+    href: "/dashboard/simulador",
+    emoji: "📊",
+    title: "Portafolio e independencia financiera (UF)",
+    description:
+      "En clave chilena: proyecta tu patrimonio en pesos y UF, y descubre de cuánto sería la renta mensual que podrías retirar de por vida con la regla del 4%.",
+    available: true,
+  },
+  {
     href: "/simuladores/interes-compuesto",
     emoji: "📈",
     title: "Interés compuesto / Proyección de ahorro",
