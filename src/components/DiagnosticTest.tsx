@@ -16,7 +16,7 @@ import {
   type DiagnosticDepth,
   type DiagnosticQuestion,
 } from "@/lib/diagnostic";
-import type { DiagnosticResult, FinancialLevel } from "@/lib/types";
+import type { DiagnosticPlacement, DiagnosticResult, FinancialLevel } from "@/lib/types";
 
 /** Fases de la pantalla: elegir profundidad → responder → resultado. */
 type Phase = "intro" | "quiz" | "result";
@@ -386,11 +386,73 @@ interface ResultScreenProps {
   onRetry: () => void;
 }
 
+/**
+ * Qué se convalidó con este resultado. Tres mensajes distintos porque son tres
+ * situaciones distintas: acabas de saltarte módulos, ya te los habías saltado
+ * (repetiste el test sin subir de nivel) o empiezas desde el principio.
+ */
+function PlacementBanner({ placement }: { placement: DiagnosticPlacement }): ReactNode {
+  const { validatedNow, validatedTotal, moduleTitles, nextModuleTitle } = placement;
+  const modules = moduleTitles.map((title) => `«${title}»`).join(", ");
+  const lessonWord = (n: number) => (n === 1 ? "lección" : "lecciones");
+  const moduleWord = moduleTitles.length === 1 ? "el módulo" : "los módulos";
+
+  // Principiante: nada que convalidar, pero sí conviene decirle por dónde parte.
+  if (validatedTotal === 0) {
+    return (
+      <div className="mx-auto mt-5 max-w-md rounded-xl border border-slate-200 bg-white px-4 py-3 text-left">
+        <p className="text-sm font-semibold text-slate-800">🚩 Empiezas desde la base</p>
+        <p className="mt-1 text-xs leading-relaxed text-slate-600">
+          {nextModuleTitle
+            ? `Tu ruta parte en «${nextModuleTitle}», el primer módulo del programa. Nada que saltarse: los cimientos son los que sostienen todo lo demás.`
+            : "Tu ruta parte desde el primer módulo del programa."}
+        </p>
+      </div>
+    );
+  }
+
+  const isNew = validatedNow > 0;
+  return (
+    <div className="mx-auto mt-5 max-w-md rounded-xl border border-emerald-300 bg-white px-4 py-3 text-left">
+      <p className="text-sm font-semibold text-emerald-800">
+        {isNew
+          ? `🎉 Te saltas ${validatedNow} ${lessonWord(validatedNow)}`
+          : `✅ Ya tenías ${validatedTotal} ${lessonWord(validatedTotal)} convalidadas`}
+      </p>
+      <p className="mt-1 text-xs leading-relaxed text-slate-600">
+        Por tu desempeño damos por superado {moduleWord} {modules}
+        {isNew && validatedNow < validatedTotal
+          ? ` (${validatedTotal} ${lessonWord(validatedTotal)} en total, algunas ya las llevabas completadas)`
+          : ""}
+        .{" "}
+        {nextModuleTitle ? (
+          <>
+            Tu ruta continúa en <strong className="font-semibold text-slate-800">«{nextModuleTitle}»</strong>.
+          </>
+        ) : (
+          "Tu ruta continúa en el siguiente módulo."
+        )}
+      </p>
+      <p className="mt-1.5 text-[11px] leading-snug text-slate-400">
+        Quedaron marcadas como completadas en tu ruta, pero puedes abrirlas y repasarlas
+        cuando quieras.
+      </p>
+    </div>
+  );
+}
+
 function ResultScreen({ result, onRetry }: ResultScreenProps): ReactNode {
   const summary = LEVEL_SUMMARY[result.level];
   const missed = result.wrongQuestionIds
     .map((id) => getDiagnosticQuestion(id))
     .filter((q): q is DiagnosticQuestion => q !== null);
+
+  // El CTA no manda al índice de la ruta, sino al módulo por el que le toca
+  // seguir: es el punto exacto donde lo dejó la convalidación.
+  const { placement } = result;
+  const routeHref = placement.nextModuleSlug
+    ? `/dashboard?modulo=${encodeURIComponent(placement.nextModuleSlug)}`
+    : "/dashboard";
 
   return (
     <section>
@@ -438,9 +500,11 @@ function ResultScreen({ result, onRetry }: ResultScreenProps): ReactNode {
             {summary.detail}
           </p>
 
+          <PlacementBanner placement={placement} />
+
           <Link
-            href="/dashboard"
-            className="mt-6 inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-300 sm:w-auto sm:px-8"
+            href={routeHref}
+            className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-300 sm:w-auto sm:px-8"
           >
             Ir a mi Ruta de Aprendizaje <span aria-hidden="true">→</span>
           </Link>

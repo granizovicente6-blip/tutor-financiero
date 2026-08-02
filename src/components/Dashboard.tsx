@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { DashboardNav } from "@/components/DashboardNav";
 import { DIAGNOSTIC_PATH, LEVEL_LABELS } from "@/lib/diagnostic";
@@ -127,6 +127,9 @@ const DEFAULT_CATEGORY: Category = "Finanzas Personales";
 const tabId = (category: Category) => `tab-${category.replace(/\s+/g, "-").toLowerCase()}`;
 const panelId = (category: Category) => `panel-${category.replace(/\s+/g, "-").toLowerCase()}`;
 
+/** Ancla de un módulo, para enlazar directo a él (`?modulo=<slug>`). */
+const moduleAnchorId = (slug: string) => `modulo-${slug}`;
+
 interface DashboardProps {
   /** Módulos agrupados en las dos categorías principales. */
   categories: CategorySection[];
@@ -152,6 +155,11 @@ interface DashboardProps {
   financialLevel: FinancialLevel | null;
   /** Pestaña abierta al cargar (por defecto, Finanzas Personales). */
   initialCategory?: Category;
+  /**
+   * Módulo a destacar al entrar (`?modulo=<slug>`). Lo usa el test de
+   * diagnóstico para dejar al estudiante justo donde continúa su ruta.
+   */
+  highlightModuleSlug?: string | null;
   /** Aviso a mostrar si el usuario llegó desde una lección bloqueada. */
   lockedNotice?: LockedNotice | null;
   userEmail: string;
@@ -195,12 +203,23 @@ export function Dashboard({
   isPremium,
   financialLevel,
   initialCategory,
+  highlightModuleSlug,
   lockedNotice,
   userEmail,
 }: DashboardProps) {
   const [activeCategory, setActiveCategory] = useState<Category>(
     initialCategory ?? DEFAULT_CATEGORY,
   );
+
+  // Al llegar desde el test de diagnóstico, el módulo destacado suele quedar
+  // fuera de pantalla (hay módulos convalidados por encima): lo traemos a la
+  // vista para que el estudiante vea de inmediato dónde continúa.
+  useEffect(() => {
+    if (!highlightModuleSlug) return;
+    document
+      .getElementById(moduleAnchorId(highlightModuleSlug))
+      ?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [highlightModuleSlug]);
 
   // Mapa slug -> estado, para consulta O(1) al renderizar.
   const statusBySlug = new Map<string, LessonStatus>(
@@ -421,13 +440,28 @@ export function Dashboard({
 
           {/* Módulos y lecciones de la categoría activa */}
           <div className="mt-6 flex flex-col gap-5">
-            {section.modules.map((module, moduleIndex) => (
-              <section key={module.slug}>
+            {section.modules.map((module, moduleIndex) => {
+              const isHighlighted = module.slug === highlightModuleSlug;
+              return (
+              <section
+                key={module.slug}
+                id={moduleAnchorId(module.slug)}
+                className={
+                  isHighlighted
+                    ? "scroll-mt-4 rounded-2xl border-2 border-emerald-400 bg-white/60 p-3 shadow-sm"
+                    : "scroll-mt-4"
+                }
+              >
                 <div className="mb-2 px-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h3 className="text-sm font-semibold text-slate-900">
                       Módulo {moduleIndex + 1}: {module.title}
                     </h3>
+                    {isHighlighted && (
+                      <span className="rounded-full bg-emerald-600 px-2 py-0.5 text-[11px] font-semibold text-white">
+                        Continúas aquí
+                      </span>
+                    )}
                     <span
                       className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${meta.chip}`}
                     >
@@ -560,7 +594,8 @@ export function Dashboard({
                   })}
                 </ul>
               </section>
-            ))}
+              );
+            })}
           </div>
         </div>
 

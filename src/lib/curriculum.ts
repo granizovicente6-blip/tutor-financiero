@@ -3692,6 +3692,11 @@ export function lessonExists(slug: string): boolean {
   return getLessonBySlug(slug) !== null;
 }
 
+/** Busca un módulo por su slug (para enlazar a un módulo concreto del dashboard). */
+export function getModuleBySlug(slug: string): Module | null {
+  return getAllModules().find((mod) => mod.slug === slug) ?? null;
+}
+
 /**
  * Slugs de lección repetidos, si los hubiera.
  *

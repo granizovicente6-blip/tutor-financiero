@@ -5,7 +5,11 @@ import {
   type CategorySection,
   type LockedNotice,
 } from "@/components/Dashboard";
-import { getLessonBySlug, getModulesGroupedByCategory } from "@/lib/curriculum";
+import {
+  getLessonBySlug,
+  getModuleBySlug,
+  getModulesGroupedByCategory,
+} from "@/lib/curriculum";
 import {
   buildStatusMap,
   getLessonAccess,
@@ -16,8 +20,12 @@ import { loginPath } from "@/lib/auth-redirect";
 import type { FinancialLevel, LessonProgress } from "@/lib/types";
 
 interface DashboardPageProps {
-  /** `?bloqueada=<slug>`: llega así quien intentó abrir una lección con candado. */
-  searchParams: { bloqueada?: string };
+  searchParams: {
+    /** `?bloqueada=<slug>`: llega así quien intentó abrir una lección con candado. */
+    bloqueada?: string;
+    /** `?modulo=<slug>`: abre la ruta en ese módulo (viene del test de diagnóstico). */
+    modulo?: string;
+  };
 }
 
 /**
@@ -92,6 +100,16 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
         }
       : null;
 
+  // Módulo al que apunta el enlace del test de diagnóstico. El slug viene de la
+  // URL, así que se resuelve contra el currículum antes de usarlo: si no existe,
+  // simplemente no se destaca nada.
+  const highlighted = searchParams.modulo ? getModuleBySlug(searchParams.modulo) : null;
+
+  // El aviso de lección bloqueada manda sobre el destacado: quien llega ahí
+  // necesita ver la lección que le falta, no el módulo que venía enlazado.
+  const initialCategory =
+    blocked && showNotice ? blocked.module.category : highlighted?.category;
+
   return (
     <Dashboard
       categories={getCategorySections()}
@@ -100,7 +118,8 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
       premiumLockedSlugs={[...premiumLocked]}
       isPremium={isPremium}
       financialLevel={(profile?.financial_level ?? null) as FinancialLevel | null}
-      initialCategory={blocked && showNotice ? blocked.module.category : undefined}
+      initialCategory={initialCategory}
+      highlightModuleSlug={highlighted?.slug ?? null}
       lockedNotice={lockedNotice}
       userEmail={user.email ?? ""}
     />

@@ -50,7 +50,9 @@ export type AnalyticsEventType =
   /** Un usuario Premium pidió el desglose con IA de un ETF o acción (Fase 8). */
   | "instrument_analyzed"
   /** Un usuario Free chocó con el muro de pago del análisis de mercado. */
-  | "instrument_paywall_hit";
+  | "instrument_paywall_hit"
+  /** Terminó el Test de Diagnóstico (nivel asignado y módulos convalidados). */
+  | "diagnostic_completed";
 
 // ---------------------------------------------------------------------------
 // Suscripción (Fase 7)
@@ -118,6 +120,22 @@ export interface QuizResult {
 // ---------------------------------------------------------------------------
 
 /**
+ * Convalidación aplicada al terminar el test: los módulos que el nivel da por
+ * superados ya quedaron marcados como `completed` en `lesson_progress`.
+ */
+export interface DiagnosticPlacement {
+  /** Lecciones marcadas como completadas EN ESTE intento (0 si ya lo estaban). */
+  validatedNow: number;
+  /** Lecciones que convalida el nivel en total, ya contaran de antes o no. */
+  validatedTotal: number;
+  /** Títulos de los módulos convalidados, para el mensaje de resultado. */
+  moduleTitles: string[];
+  /** Módulo por el que continúa la ruta (destino del CTA). */
+  nextModuleSlug: string | null;
+  nextModuleTitle: string | null;
+}
+
+/**
  * Resultado de un intento del test de diagnóstico, calculado por el servidor
  * contra el pool de `lib/diagnostic.ts` (el cliente solo manda qué respondió).
  * El nivel ya quedó guardado en `profiles.financial_level` cuando esto vuelve.
@@ -130,4 +148,6 @@ export interface DiagnosticResult {
   level: FinancialLevel;
   /** Ids de las preguntas falladas, para repasarlas en la pantalla de resultado. */
   wrongQuestionIds: string[];
+  /** Módulos convalidados por el nivel obtenido (ver `lib/placement`). */
+  placement: DiagnosticPlacement;
 }
