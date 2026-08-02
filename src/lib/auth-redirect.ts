@@ -37,6 +37,33 @@ export const DEFAULT_AFTER_REGISTER = "/diagnostico";
 /** Nombre del parámetro que transporta el destino a través del login. */
 export const REDIRECT_PARAM = "redirectTo";
 
+/** Formulario donde se pide el correo para recuperar la contraseña. */
+export const FORGOT_PASSWORD_PATH = "/forgot-password";
+
+/** Página a la que apunta el enlace del correo de recuperación. */
+export const RESET_PASSWORD_PATH = "/reset-password";
+
+/** URL pública de producción; fallback si no hay `NEXT_PUBLIC_SITE_URL`. */
+const PRODUCTION_SITE_URL = "https://tutor-financiero.vercel.app";
+
+/**
+ * URL ABSOLUTA a la que Supabase devuelve al usuario desde el correo de
+ * recuperación (`resetPasswordForEmail`). Tiene que ser absoluta porque el
+ * enlace se abre desde el cliente de correo, fuera de la app.
+ *
+ * Se prefiere `NEXT_PUBLIC_SITE_URL` (así en local se prueba contra
+ * `http://localhost:3000` y no se salta al dominio de producción) y, si no está
+ * definida, se usa el dominio de producción.
+ *
+ * Recuerda: cada origen usado aquí debe estar en Supabase Dashboard ->
+ * Authentication -> URL Configuration -> Redirect URLs, o el enlace del correo
+ * caerá en el Site URL por defecto.
+ */
+export function resetPasswordRedirectUrl(): string {
+  const base = (process.env.NEXT_PUBLIC_SITE_URL ?? PRODUCTION_SITE_URL).replace(/\/$/, "");
+  return `${base}${RESET_PASSWORD_PATH}`;
+}
+
 /** True si la ruta pertenece al área protegida (ella misma o una subruta). */
 export function isProtectedPath(pathname: string): boolean {
   return PROTECTED_PREFIXES.some(

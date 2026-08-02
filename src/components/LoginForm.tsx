@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useFormState, useFormStatus } from "react-dom";
 import { login } from "@/app/login/actions";
-import { REDIRECT_PARAM, registerPath } from "@/lib/auth-redirect";
+import { FORGOT_PASSWORD_PATH, REDIRECT_PARAM, registerPath } from "@/lib/auth-redirect";
 import type { AuthState } from "@/lib/types";
 
 const initialState: AuthState = { error: null, message: null };
@@ -67,6 +67,14 @@ export function LoginForm({ redirectTo, notice }: LoginFormProps) {
           className="rounded-xl border border-slate-300 bg-slate-50 px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
         />
       </label>
+
+      {/* Fuera del <label> para que el clic en el enlace no enfoque el campo. */}
+      <Link
+        href={FORGOT_PASSWORD_PATH}
+        className="-mt-2 self-end text-xs font-medium text-emerald-700 hover:text-emerald-800"
+      >
+        ¿Olvidaste tu contraseña?
+      </Link>
 
       {state.error && (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{state.error}</p>
