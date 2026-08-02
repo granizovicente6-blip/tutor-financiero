@@ -3,21 +3,22 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import { DiagnosticTest } from "@/components/DiagnosticTest";
 import { DIAGNOSTIC_PATH } from "@/lib/diagnostic";
+import { readFinancialLevels } from "@/lib/financial-level";
 import { loginPath } from "@/lib/auth-redirect";
-import type { FinancialLevel } from "@/lib/types";
 
 export const metadata = {
-  title: "Test de Diagnóstico · Tutor Financiero",
+  title: "Tests de Diagnóstico · Tutor Financiero",
   description:
-    "Mide tu nivel de conocimiento financiero y personaliza tu ruta de aprendizaje.",
+    "Mide tu nivel en Finanzas Personales e Inversiones y personaliza tu ruta de aprendizaje.",
 };
 
 /**
- * Pantalla del Test de Diagnóstico de entrada (Server Component).
+ * Pantalla de los Tests de Diagnóstico de entrada (Server Component).
  *
- * Reemplaza a la antigua selección manual de nivel: aquí el estudiante elige la
- * profundidad del test, responde y el servidor le asigna el nivel
- * (`profiles.financial_level`) que después usan el tutor y la ruta.
+ * Reemplaza a la antigua selección manual de nivel: aquí el estudiante elige qué
+ * categoría quiere evaluar (Finanzas Personales, Inversiones o ambas) y con
+ * cuánta profundidad, responde, y el servidor le asigna el nivel de cada
+ * categoría —además del global que usa el tutor— y convalida sus módulos.
  *
  * Exige sesión (defensa en profundidad, además del middleware) porque el
  * resultado se escribe en el perfil.
@@ -32,11 +33,7 @@ export default async function DiagnosticPage() {
     redirect(loginPath(DIAGNOSTIC_PATH));
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("financial_level")
-    .eq("id", user.id)
-    .maybeSingle();
+  const levels = await readFinancialLevels(supabase, user.id);
 
   return (
     <div className="min-h-dvh bg-slate-100 text-slate-800">
@@ -60,9 +57,7 @@ export default async function DiagnosticPage() {
       </header>
 
       <main className="mx-auto max-w-3xl px-4 py-8">
-        <DiagnosticTest
-          currentLevel={(profile?.financial_level ?? null) as FinancialLevel | null}
-        />
+        <DiagnosticTest currentLevels={levels} />
         <p className="mt-8 text-center text-xs text-slate-400">
           Contenido educativo, no es asesoría financiera.
         </p>

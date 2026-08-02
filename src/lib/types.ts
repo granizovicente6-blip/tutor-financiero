@@ -1,5 +1,10 @@
 // Tipos compartidos por la app (chat + persistencia + auth).
 
+// Import SOLO de tipos: `lib/diagnostic` importa `FinancialLevel` de aquí, pero
+// como este módulo no tiene valores en tiempo de ejecución el ciclo se borra al
+// compilar y no llega ningún import circular al bundle.
+import type { DiagnosticCategory, DiagnosticScope } from "@/lib/diagnostic";
+
 export type ChatRole = "user" | "assistant";
 
 /** Nivel de conocimiento financiero del estudiante (columna profiles.financial_level). */
@@ -121,7 +126,8 @@ export interface QuizResult {
 
 /**
  * Convalidación aplicada al terminar el test: los módulos que el nivel da por
- * superados ya quedaron marcados como `completed` en `lesson_progress`.
+ * superados ya quedaron marcados como `completed` en `lesson_progress`. Es
+ * siempre relativa a UNA categoría (ver `lib/placement`).
  */
 export interface DiagnosticPlacement {
   /** Lecciones marcadas como completadas EN ESTE intento (0 si ya lo estaban). */
@@ -136,11 +142,11 @@ export interface DiagnosticPlacement {
 }
 
 /**
- * Resultado de un intento del test de diagnóstico, calculado por el servidor
- * contra el pool de `lib/diagnostic.ts` (el cliente solo manda qué respondió).
- * El nivel ya quedó guardado en `profiles.financial_level` cuando esto vuelve.
+ * Resultado del test de UNA categoría. Cada categoría evaluada trae su propio
+ * puntaje, su nivel y su convalidación: son competencias independientes.
  */
-export interface DiagnosticResult {
+export interface DiagnosticCategoryResult {
+  category: DiagnosticCategory;
   correctCount: number;
   total: number;
   /** Aciertos en porcentaje (0–100), redondeado. */
@@ -148,6 +154,27 @@ export interface DiagnosticResult {
   level: FinancialLevel;
   /** Ids de las preguntas falladas, para repasarlas en la pantalla de resultado. */
   wrongQuestionIds: string[];
-  /** Módulos convalidados por el nivel obtenido (ver `lib/placement`). */
+  /** Módulos de esta categoría convalidados por el nivel (ver `lib/placement`). */
   placement: DiagnosticPlacement;
+}
+
+/**
+ * Resultado de un intento del test de diagnóstico, calculado por el servidor
+ * contra el pool de `lib/diagnostic.ts` (el cliente solo manda qué respondió).
+ * Los niveles ya quedaron guardados en `profiles` cuando esto vuelve.
+ */
+export interface DiagnosticResult {
+  /** Qué se evaluó: una categoría o ambas. */
+  scope: DiagnosticScope;
+  /**
+   * Nivel global guardado en `profiles.financial_level` (el que usa el tutor).
+   * Resume los niveles por categoría, incluidos los que ya estaban medidos.
+   */
+  level: FinancialLevel;
+  /** Aciertos sumando todas las categorías del intento. */
+  correctCount: number;
+  total: number;
+  accuracy: number;
+  /** Desglose por categoría, en el orden en que se respondieron. */
+  categories: DiagnosticCategoryResult[];
 }

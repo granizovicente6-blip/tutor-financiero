@@ -28,8 +28,16 @@ create extension if not exists "pgcrypto";
 create table if not exists public.profiles (
   id               uuid        primary key references auth.users (id) on delete cascade,
   email            text,
-  -- Nivel de conocimiento financiero (Fase 4). NULL = aún no definido.
+  -- Nivel de conocimiento financiero GLOBAL (Fase 4). Es el que lee el tutor.
+  -- NULL = aún no definido. Resume los dos niveles por categoría de más abajo.
   financial_level  text        check (financial_level in ('beginner', 'intermediate', 'advanced')),
+  -- Nivel por categoría del currículum (migración 009): el Test de Diagnóstico
+  -- se rinde por separado para Finanzas Personales y para Inversiones, y cada
+  -- uno convalida módulos solo de su categoría. NULL = categoría aún no medida.
+  financial_level_personal  text
+                 check (financial_level_personal in ('beginner', 'intermediate', 'advanced')),
+  financial_level_investing text
+                 check (financial_level_investing in ('beginner', 'intermediate', 'advanced')),
   -- Racha de estudio (Fase 5). Se actualizan vía la función touch_streak().
   current_streak   int         not null default 0,
   longest_streak   int         not null default 0,

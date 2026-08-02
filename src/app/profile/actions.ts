@@ -4,17 +4,31 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { logEvent } from "@/lib/analytics";
 import {
+  categoriesForScope,
+  combineLevels,
+  DIAGNOSTIC_CATEGORIES,
   getDepthOption,
   getDiagnosticQuestion,
   isDiagnosticDepth,
+  isDiagnosticScope,
   levelForAccuracy,
+  questionCategory,
+  type DiagnosticCategory,
   type DiagnosticDepth,
+  type DiagnosticScope,
 } from "@/lib/diagnostic";
-import { getPlacementForLevel } from "@/lib/placement";
-import type { DiagnosticPlacement, DiagnosticResult, FinancialLevel } from "@/lib/types";
-
-/** Cliente de Supabase ya autenticado (el que devuelve `createClient`). */
-type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
+import {
+  readFinancialLevels,
+  writeFinancialLevels,
+  type SupabaseServerClient,
+} from "@/lib/financial-level";
+import { getPlacementForCategory } from "@/lib/placement";
+import type {
+  DiagnosticCategoryResult,
+  DiagnosticPlacement,
+  DiagnosticResult,
+  FinancialLevel,
+} from "@/lib/types";
 
 /** Una respuesta tal como la manda el cliente al terminar el test. */
 export interface DiagnosticAnswer {
@@ -29,26 +43,33 @@ export interface SaveDiagnosticState {
 }
 
 /**
- * Server Action: corrige el Test de Diagnóstico y guarda el nivel resultante.
+ * Server Action: corrige el Test de Diagnóstico y guarda los niveles resultantes.
  *
- * El cliente manda QUÉ respondió (ids + índice elegido), nunca el puntaje: la
- * corrección se hace aquí contra el pool de `lib/diagnostic.ts`, que es la única
- * fuente de verdad de las respuestas correctas. Así nadie se asigna un nivel
- * avanzado desde la consola del navegador.
+ * El cliente manda QUÉ respondió (ids + índice elegido), nunca el puntaje ni la
+ * categoría: la corrección se hace aquí contra el pool de `lib/diagnostic.ts`,
+ * que es la única fuente de verdad tanto de las respuestas correctas como del
+ * tema —y por tanto la categoría— de cada pregunta. Así nadie se asigna un nivel
+ * avanzado desde la consola del navegador ni convalida módulos de Inversiones
+ * respondiendo preguntas de presupuesto.
  *
  * La política RLS "profiles_update_own" garantiza además que solo se pueda
  * escribir el propio perfil.
  */
 export async function saveDiagnosticResult(
+  scope: DiagnosticScope,
   depth: DiagnosticDepth,
   answers: DiagnosticAnswer[],
 ): Promise<SaveDiagnosticState> {
+  if (!isDiagnosticScope(scope)) {
+    return { ok: false, error: "Categoría de test inválida." };
+  }
   if (!isDiagnosticDepth(depth)) {
     return { ok: false, error: "Tipo de test inválido." };
   }
 
-  const expected = getDepthOption(depth).questionCount;
-  if (!Array.isArray(answers) || answers.length !== expected) {
+  const categories = categoriesForScope(scope);
+  const perCategory = getDepthOption(depth).questionCount;
+  if (!Array.isArray(answers) || answers.length !== perCategory * categories.length) {
     return { ok: false, error: "El test llegó incompleto. Inténtalo de nuevo." };
   }
 
@@ -58,23 +79,34 @@ export async function saveDiagnosticResult(
     return { ok: false, error: "Hay respuestas duplicadas. Inténtalo de nuevo." };
   }
 
-  let correctCount = 0;
-  const wrongQuestionIds: string[] = [];
+  // Corrección: cada respuesta cae en el saco de la categoría de SU pregunta.
+  const scored = new Map<DiagnosticCategory, { correct: number; wrong: string[] }>(
+    categories.map((category) => [category, { correct: 0, wrong: [] }]),
+  );
 
   for (const answer of answers) {
     const question = getDiagnosticQuestion(answer.questionId);
     if (!question) {
       return { ok: false, error: "El test contiene preguntas desconocidas." };
     }
-    if (answer.selectedIndex === question.correctIndex) {
-      correctCount += 1;
-    } else {
-      wrongQuestionIds.push(question.id);
+    const bucket = scored.get(questionCategory(question));
+    if (!bucket) {
+      // Una pregunta fuera del alcance elegido: el intento no es corregible sin
+      // decidir a qué nivel afecta, así que se rechaza entero.
+      return { ok: false, error: "El test mezcla categorías. Inténtalo de nuevo." };
     }
+    if (answer.selectedIndex === question.correctIndex) bucket.correct += 1;
+    else bucket.wrong.push(question.id);
   }
 
-  const accuracy = Math.round((correctCount / expected) * 100);
-  const level = levelForAccuracy(accuracy);
+  // Cada categoría debe traer exactamente las preguntas que se anunciaron: si no
+  // cuadra, el porcentaje no sería comparable con los umbrales de nivel.
+  for (const category of categories) {
+    const bucket = scored.get(category)!;
+    if (bucket.correct + bucket.wrong.length !== perCategory) {
+      return { ok: false, error: "El test llegó incompleto. Inténtalo de nuevo." };
+    }
+  }
 
   const supabase = await createClient();
   const {
@@ -84,26 +116,70 @@ export async function saveDiagnosticResult(
     return { ok: false, error: "No autenticado." };
   }
 
-  const { error } = await supabase
-    .from("profiles")
-    .update({ financial_level: level })
-    .eq("id", user.id);
+  // Niveles por categoría: los recién medidos mandan; los que no se evaluaron se
+  // conservan tal cual estaban (rendir Inversiones no puede tocar el nivel de
+  // Finanzas Personales).
+  const stored = await readFinancialLevels(supabase, user.id);
+  const measured: Partial<Record<DiagnosticCategory, FinancialLevel>> = {};
+  const categoryAccuracy = new Map<DiagnosticCategory, number>();
 
-  if (error) {
-    console.error("[profile] No se pudo guardar el nivel del diagnóstico:", error);
+  for (const category of categories) {
+    const bucket = scored.get(category)!;
+    const accuracy = Math.round((bucket.correct / perCategory) * 100);
+    categoryAccuracy.set(category, accuracy);
+    measured[category] = levelForAccuracy(accuracy);
+  }
+
+  // Nivel global (el que lee el tutor): resume ambas competencias en una.
+  const effective = DIAGNOSTIC_CATEGORIES.map(
+    (category) => measured[category] ?? stored.byCategory[category],
+  ).filter((level): level is FinancialLevel => level !== null);
+
+  // Si de la otra categoría no sabemos nada —porque nunca se evaluó, o porque la
+  // migración 009 aún no está aplicada— el nivel global anterior es el único
+  // recuerdo que queda de ella: lo tomamos en cuenta para no degradar a alguien
+  // que solo vino a medirse en una categoría.
+  const overall = combineLevels(
+    effective.length > 1 || !stored.overall ? effective : [...effective, stored.overall],
+  );
+
+  if (!(await writeFinancialLevels(supabase, user.id, overall, measured))) {
     return { ok: false, error: "No se pudo guardar tu nivel. Inténtalo de nuevo." };
   }
 
-  // Convalidación: los módulos que el nivel da por superados quedan completados,
-  // de modo que el candado secuencial abra el siguiente. Si falla, el nivel ya
-  // está guardado y el estudiante puede avanzar a mano: no rompemos el flujo.
-  const placement = await applyPlacement(supabase, user.id, level);
+  // Convalidación: los módulos que cada nivel da por superados quedan completados
+  // DENTRO DE SU CATEGORÍA, de modo que el candado secuencial abra el siguiente.
+  // Si falla, el nivel ya está guardado y el estudiante puede avanzar a mano: no
+  // rompemos el flujo.
+  const results: DiagnosticCategoryResult[] = [];
+  for (const category of categories) {
+    const bucket = scored.get(category)!;
+    const level = measured[category]!;
+    results.push({
+      category,
+      correctCount: bucket.correct,
+      total: perCategory,
+      accuracy: categoryAccuracy.get(category)!,
+      level,
+      wrongQuestionIds: bucket.wrong,
+      placement: await applyPlacement(supabase, user.id, category, level),
+    });
+  }
+
+  const correctCount = results.reduce((sum, r) => sum + r.correctCount, 0);
+  const total = perCategory * categories.length;
 
   await logEvent(supabase, user.id, "diagnostic_completed", {
+    scope,
     depth,
-    accuracy,
-    level,
-    validated_now: placement.validatedNow,
+    level: overall,
+    accuracy: Math.round((correctCount / total) * 100),
+    categories: results.map((r) => ({
+      category: r.category,
+      accuracy: r.accuracy,
+      level: r.level,
+      validated_now: r.placement.validatedNow,
+    })),
   });
 
   // Las vistas con progreso son Server Components: sin esto seguirían mostrando
@@ -113,16 +189,26 @@ export async function saveDiagnosticResult(
 
   return {
     ok: true,
-    result: { correctCount, total: expected, accuracy, level, wrongQuestionIds, placement },
+    result: {
+      scope,
+      level: overall,
+      correctCount,
+      total,
+      accuracy: Math.round((correctCount / total) * 100),
+      categories: results,
+    },
   };
 }
 
 /**
- * Marca como completadas las lecciones que convalida el nivel obtenido.
+ * Marca como completadas las lecciones que convalida el nivel obtenido EN UNA
+ * CATEGORÍA.
  *
  * Nunca quita nada: solo escribe las lecciones que aún NO estaban completadas,
  * así repetir el test es siempre aditivo. Un intento peor no degrada el progreso
  * (las lecciones ya superadas siguen ahí) y uno mejor añade los módulos nuevos.
+ * Y como los slugs salen de `getPlacementForCategory`, un test de Inversiones no
+ * puede escribir progreso de Finanzas Personales.
  *
  * Tampoco toca `quiz_score`: al no incluir la columna en el UPSERT, el valor que
  * hubiera de un intento real de quiz se conserva.
@@ -130,9 +216,10 @@ export async function saveDiagnosticResult(
 async function applyPlacement(
   supabase: SupabaseServerClient,
   userId: string,
+  category: DiagnosticCategory,
   level: FinancialLevel,
 ): Promise<DiagnosticPlacement> {
-  const placement = getPlacementForLevel(level);
+  const placement = getPlacementForCategory(category, level);
   const base: DiagnosticPlacement = {
     validatedNow: 0,
     validatedTotal: placement.lessonSlugs.length,

@@ -6,9 +6,11 @@ import {
   type LockedNotice,
 } from "@/components/Dashboard";
 import {
+  CATEGORIES,
   getLessonBySlug,
   getModuleBySlug,
   getModulesGroupedByCategory,
+  type Category,
 } from "@/lib/curriculum";
 import {
   buildStatusMap,
@@ -25,7 +27,19 @@ interface DashboardPageProps {
     bloqueada?: string;
     /** `?modulo=<slug>`: abre la ruta en ese módulo (viene del test de diagnóstico). */
     modulo?: string;
+    /**
+     * `?categoria=<nombre>`: abre esa pestaña. Lo manda el test de diagnóstico
+     * junto con `modulo`, para que terminar el test de Inversiones aterrice en
+     * Inversiones aunque la categoría ya esté entera convalidada y no haya
+     * módulo siguiente al que apuntar.
+     */
+    categoria?: string;
   };
+}
+
+/** Valida el `?categoria=` de la URL contra el currículum (no es de fiar). */
+function parseCategory(value: string | undefined): Category | null {
+  return CATEGORIES.find((category) => category === value) ?? null;
 }
 
 /**
@@ -107,8 +121,12 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
 
   // El aviso de lección bloqueada manda sobre el destacado: quien llega ahí
   // necesita ver la lección que le falta, no el módulo que venía enlazado.
+  // Entre los dos parámetros del diagnóstico manda el módulo: si viene, su
+  // categoría es por definición la correcta.
   const initialCategory =
-    blocked && showNotice ? blocked.module.category : highlighted?.category;
+    blocked && showNotice
+      ? blocked.module.category
+      : (highlighted?.category ?? parseCategory(searchParams.categoria) ?? undefined);
 
   return (
     <Dashboard
