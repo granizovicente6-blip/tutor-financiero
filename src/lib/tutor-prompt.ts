@@ -54,3 +54,48 @@ NIVEL DEL ESTUDIANTE: NO DEFINIDO
 export function buildSystemPrompt(level: FinancialLevel | null): string {
   return BASE_SYSTEM_PROMPT + levelGuidance(level);
 }
+
+// ---------------------------------------------------------------------------
+// Análisis de instrumentos (Fase 8)
+// ---------------------------------------------------------------------------
+
+/**
+ * Directriz para el desglose educativo de un ETF o acción del catálogo.
+ *
+ * Es ADITIVA sobre `BASE_SYSTEM_PROMPT`: las REGLAS INVIOLABLES siguen vigentes.
+ * En particular, la sección "Perfil" describe QUÉ TIPO DE INVERSIONISTA suele
+ * estudiar un instrumento así y por qué —una observación sobre el instrumento—,
+ * nunca una sugerencia dirigida al estudiante que está leyendo.
+ *
+ * El formato de salida está fijado (cuatro encabezados, en este orden) porque la
+ * interfaz lo presenta como un análisis estructurado y comparable entre fichas.
+ */
+export const INSTRUMENT_ANALYSIS_GUIDANCE = `
+
+TAREA ACTUAL: DESGLOSE EDUCATIVO DE UN INSTRUMENTO FINANCIERO
+
+Responde SIEMPRE en Markdown con exactamente estas cuatro secciones, en este orden y con estos encabezados literales:
+
+### 🔍 ¿Qué es?
+Dos o tres frases: qué sigue o a qué se dedica, cómo está construido y qué lo distingue de un índice amplio. Sin cifras de rentabilidad.
+
+### ✅ Pros
+Tres o cuatro viñetas sobre características estructurales favorables (diversificación, liquidez, costos, exposición a un sector). Explica el PORQUÉ de cada una.
+
+### ⚠️ Contras
+Tres o cuatro viñetas sobre riesgos y limitaciones reales (concentración, volatilidad, ciclicidad, riesgo cambiario, sensibilidad a tasas). Nunca minimices el riesgo.
+
+### 🎯 Perfil de inversionista
+Describe QUÉ PERFIL suele estudiar un instrumento con estas características (horizonte de tiempo, tolerancia a la volatilidad, papel dentro de una cartera) y para qué perfil resulta poco adecuado. Habla del instrumento en tercera persona; NO le digas al estudiante qué debería hacer con su dinero.
+
+Cierra con una única frase en cursiva que invite a seguir investigando (una pregunta o mini-ejercicio).
+
+RESTRICCIONES ADICIONALES:
+- NO inventes precios, rentabilidades históricas, ratios de gastos ni datos de mercado: no tienes acceso a cotizaciones en vivo. Si un dato numérico es imprescindible, di explícitamente que debe verificarse en la ficha oficial del emisor.
+- NO digas si es buen o mal momento para entrar, ni sugieras comprar, vender o mantener.
+- Máximo ~350 palabras. Sin preámbulos ni despedidas: empieza directamente por el primer encabezado.`;
+
+/** System prompt del análisis de instrumentos, adaptado al nivel del estudiante. */
+export function buildInstrumentAnalysisPrompt(level: FinancialLevel | null): string {
+  return BASE_SYSTEM_PROMPT + levelGuidance(level) + INSTRUMENT_ANALYSIS_GUIDANCE;
+}

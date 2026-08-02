@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { DashboardNav } from "@/components/DashboardNav";
 import type { Category } from "@/lib/curriculum";
 import type { LessonProgress, LessonStatus } from "@/lib/types";
 
@@ -250,6 +251,8 @@ export function Dashboard({
           </div>
         </div>
       </header>
+
+      <DashboardNav active="ruta" />
 
       <main className="mx-auto max-w-3xl px-4 py-6">
         {/* Llamada a suscribirse: solo para quien aún no tiene membresía */}

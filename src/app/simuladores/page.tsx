@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { DashboardNav } from "@/components/DashboardNav";
 import { loginPath } from "@/lib/auth-redirect";
 
 /**
@@ -63,6 +64,8 @@ export default async function SimuladoresPage() {
           </Link>
         </div>
       </header>
+
+      <DashboardNav active="simuladores" />
 
       <main className="mx-auto max-w-3xl px-4 py-6">
         <p className="mb-4 text-sm text-slate-600">

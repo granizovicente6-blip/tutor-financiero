@@ -36,7 +36,11 @@ export type AnalyticsEventType =
   | "quiz_completed"
   | "subscription_checkout_started"
   | "subscription_activated"
-  | "subscription_cancelled";
+  | "subscription_cancelled"
+  /** Un usuario Premium pidió el desglose con IA de un ETF o acción (Fase 8). */
+  | "instrument_analyzed"
+  /** Un usuario Free chocó con el muro de pago del análisis de mercado. */
+  | "instrument_paywall_hit";
 
 // ---------------------------------------------------------------------------
 // Suscripción (Fase 7)
