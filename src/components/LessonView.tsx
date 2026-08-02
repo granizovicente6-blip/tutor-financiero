@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { setLessonStatus } from "@/app/progress/actions";
+import { LessonAudioPlayer } from "@/components/LessonAudioPlayer";
 import { Quiz } from "@/components/Quiz";
 import type { QuizQuestion } from "@/lib/curriculum";
 import type { LessonStatus } from "@/lib/types";
@@ -67,6 +68,12 @@ interface LessonViewProps {
   next: LessonNav | null;
   /** La siguiente lección aún está bloqueada (se abre al completar esta). */
   nextLocked?: boolean;
+  /** True si la membresía está activa (abre el Modo Podcast completo). */
+  isPremium: boolean;
+  /** Precio ya formateado ("$4.990"): el formato lo decide el servidor. */
+  priceLabel: string;
+  /** Moneda del plan ("CLP"), tal como la publica `lib/subscription`. */
+  currencyLabel: string;
 }
 
 export function LessonView({
@@ -83,6 +90,9 @@ export function LessonView({
   prev,
   next,
   nextLocked = false,
+  isPremium,
+  priceLabel,
+  currencyLabel,
 }: LessonViewProps) {
   const router = useRouter();
   const [status, setStatus] = useState<LessonStatus>(initialStatus);
@@ -137,7 +147,8 @@ export function LessonView({
         </div>
       </header>
 
-      <main className="mx-auto max-w-2xl px-4 py-8">
+      {/* El padding inferior deja sitio al mini-reproductor fijo del Modo Podcast. */}
+      <main className="mx-auto max-w-2xl px-4 pb-28 pt-8">
         {/* Encabezado de la lección */}
         <p className="text-xs font-medium uppercase tracking-wide text-emerald-600">
           {pathTitle} · {moduleTitle}
@@ -145,6 +156,17 @@ export function LessonView({
         <h1 className="mt-1 text-2xl font-bold text-slate-900">{title}</h1>
         <p className="mt-2 text-sm leading-relaxed text-slate-600">{summary}</p>
         <p className="mt-2 text-xs text-slate-400">⏱ {estimatedMinutes} min de lectura</p>
+
+        {/* Modo Podcast: la lección también se puede escuchar. */}
+        <LessonAudioPlayer
+          lessonSlug={lessonSlug}
+          title={title}
+          summary={summary}
+          content={content}
+          isPremium={isPremium}
+          priceLabel={priceLabel}
+          currencyLabel={currencyLabel}
+        />
 
         <hr className="my-6 border-t border-slate-200" />
 

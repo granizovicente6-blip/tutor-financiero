@@ -3,7 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import { LessonView } from "@/components/LessonView";
 import { getAdjacentLessons, getLessonBySlug } from "@/lib/curriculum";
 import { buildStatusMap, getLockReason, isLessonUnlocked } from "@/lib/progression";
-import { getSubscription, hasPremiumAccess } from "@/lib/subscription";
+import {
+  PREMIUM_PLAN,
+  formatPlanPrice,
+  getSubscription,
+  hasPremiumAccess,
+} from "@/lib/subscription";
 import { loginPath } from "@/lib/auth-redirect";
 import type { LessonProgress, LessonStatus } from "@/lib/types";
 
@@ -85,6 +90,9 @@ export default async function LessonPage({ params }: LessonPageProps) {
       prev={prev ? { slug: prev.slug, title: prev.title } : null}
       next={next ? { slug: next.slug, title: next.title } : null}
       nextLocked={nextLocked}
+      isPremium={isPremium}
+      priceLabel={formatPlanPrice()}
+      currencyLabel={PREMIUM_PLAN.currencyId}
     />
   );
 }
