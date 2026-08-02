@@ -281,6 +281,38 @@ export function questionCategory(question: DiagnosticQuestion): DiagnosticCatego
   return TOPIC_META[question.topic].category;
 }
 
+// -----------------------------------------------------------------------------
+// Omitir una pregunta ("No lo sé")
+// -----------------------------------------------------------------------------
+
+/**
+ * Índice que manda el cliente cuando el estudiante elige "No lo sé / Omitir".
+ *
+ * Existe porque adivinar contamina la medición: con cuatro alternativas, quien
+ * responde al azar acierta ~25% de las veces, y ese ruido se traduce en módulos
+ * convalidados que no se dominan. Declarar la duda es información útil —vale
+ * más un "no lo sé" honesto que un acierto de suerte—, así que la omisión es una
+ * opción de primera clase y no un descuido.
+ */
+export const SKIPPED_ANSWER = -1;
+
+/**
+ * True si la respuesta no señala ninguna alternativa real de la pregunta.
+ *
+ * La regla se define por lo que NO es una alternativa válida, en vez de comparar
+ * contra `SKIPPED_ANSWER`: así el servidor trata igual la omisión deliberada y
+ * cualquier índice inventado o fuera de rango que llegue del navegador. En los
+ * dos casos el resultado es el mismo (cero puntos), pero queda registrado como
+ * omitida en vez de como error, que es lo honesto.
+ */
+export function isSkippedAnswer(question: DiagnosticQuestion, selectedIndex: number): boolean {
+  return (
+    !Number.isInteger(selectedIndex) ||
+    selectedIndex < 0 ||
+    selectedIndex >= question.options.length
+  );
+}
+
 // =============================================================================
 // POOL A — Finanzas Personales
 // Presupuesto, ahorro, fondo de emergencia, deuda y el interés de los créditos.
@@ -1300,6 +1332,10 @@ export function getDiagnosticQuestion(id: string): DiagnosticQuestion | null {
  *
  * Como la mezcla de dificultad es fija, el porcentaje de aciertos se puede leer
  * directo: fallar casi todas las intermedias deja por debajo de 40.
+ *
+ * El denominador son SIEMPRE las preguntas del test, no las respondidas: omitir
+ * suma cero igual que errar. Solo la certeza positiva convalida lecciones, que
+ * es justamente lo que hace seguro ofrecer el "No lo sé" (ver `SKIPPED_ANSWER`).
  */
 export const LEVEL_THRESHOLDS = { advanced: 75, intermediate: 40 } as const;
 

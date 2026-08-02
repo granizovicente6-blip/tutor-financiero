@@ -16,6 +16,7 @@ import {
   LEVEL_LABELS,
   LEVEL_SUMMARY,
   selectDiagnosticTest,
+  SKIPPED_ANSWER,
   totalQuestionsFor,
   TOPIC_LABELS,
   type DiagnosticCategory,
@@ -112,9 +113,12 @@ export function DiagnosticTest({ currentLevels }: DiagnosticTestProps): ReactNod
 
   async function finish(): Promise<void> {
     if (isSaving) return;
+    // Una pregunta que nunca se tocó viaja como omitida, igual que si el
+    // estudiante hubiera pulsado "No lo sé": en ambos casos no hay certeza que
+    // acreditar, y el servidor las cuenta como cero.
     const payload: DiagnosticAnswer[] = questions.map((q, i) => ({
       questionId: q.question.id,
-      selectedIndex: answers[i] ?? -1, // -1 nunca coincide con correctIndex
+      selectedIndex: answers[i] ?? SKIPPED_ANSWER,
     }));
 
     setIsSaving(true);
@@ -209,6 +213,8 @@ function IntroScreen({
           Hay un test para cada categoría del programa. Elige cuál quieres rendir: cada uno te
           asigna su propio nivel y convalida los módulos de esa categoría que ya dominas. No hay
           respuestas que «cuenten en tu contra»: mientras mejor te midamos, mejor te explicamos.
+          Si una pregunta no la sabes, puedes omitirla; adivinar solo consigue que te saltes
+          lecciones que te habrían servido.
         </p>
 
         {/* Niveles ya medidos, para saber qué conviene rendir ahora. */}
@@ -378,11 +384,13 @@ function QuizScreen({
   const total = questions.length;
   const { category, question } = questions[index];
   const selected = answers[index];
+  const isSkipped = selected === SKIPPED_ANSWER;
   const isLast = index === total - 1;
-  const answeredCount = answers.filter((a) => a !== null).length;
-  // La barra mide lo respondido, no la pregunta en pantalla: volver atrás a
-  // revisar no debería parecer que se pierde progreso.
-  const percent = Math.round((answeredCount / total) * 100);
+  // La barra mide lo resuelto (respondido u omitido a propósito), no la pregunta
+  // en pantalla: volver atrás a revisar no debería parecer que se pierde
+  // progreso, y omitir es avanzar tanto como responder.
+  const resolvedCount = answers.filter((a) => a !== null).length;
+  const percent = Math.round((resolvedCount / total) * 100);
 
   // Posición dentro del bloque de su categoría: con "Ambas" el estudiante
   // necesita saber que cambió de test, no solo que avanzó una pregunta.
@@ -399,7 +407,7 @@ function QuizScreen({
         <span>
           Pregunta {index + 1} de {total}
         </span>
-        <span>{percent}% respondido</span>
+        <span>{percent}% completado</span>
       </div>
       <div
         className="h-2.5 w-full overflow-hidden rounded-full bg-slate-200"
@@ -474,6 +482,41 @@ function QuizScreen({
               </button>
             );
           })}
+
+          {/* "No lo sé" es una alternativa más, no un atajo escondido: adivinar
+              con 4 opciones acierta ~25% de las veces y ese ruido terminaría
+              convalidando lecciones que no se dominan. Puntúa cero, igual que
+              un error, así que declarar la duda nunca perjudica frente a fallar. */}
+          <button
+            type="button"
+            role="radio"
+            aria-checked={isSkipped}
+            disabled={isSaving}
+            onClick={() => onSelect(SKIPPED_ANSWER)}
+            className={`mt-1 flex items-start gap-3 rounded-xl border border-dashed px-4 py-3 text-left text-sm transition disabled:cursor-not-allowed disabled:opacity-70 ${
+              isSkipped
+                ? "border-amber-500 bg-amber-50 ring-1 ring-amber-200"
+                : "border-slate-300 bg-slate-50 hover:border-amber-300 hover:bg-amber-50/40"
+            }`}
+          >
+            <span
+              className={`mt-0.5 flex h-5 w-5 flex-none items-center justify-center rounded-full border text-[11px] font-semibold ${
+                isSkipped
+                  ? "border-amber-600 bg-amber-600 text-white"
+                  : "border-slate-300 text-slate-500"
+              }`}
+              aria-hidden="true"
+            >
+              ➖
+            </span>
+            <span className="leading-relaxed">
+              <span className="font-medium text-slate-700">No lo sé / Omitir</span>
+              <span className="mt-0.5 block text-xs text-slate-500">
+                Preferimos un «no lo sé» honesto a un acierto de suerte. Cuenta como no
+                acertada, así que tu ruta parte donde de verdad corresponde.
+              </span>
+            </span>
+          </button>
         </div>
       </div>
 
@@ -515,7 +558,7 @@ function QuizScreen({
       </div>
       {selected === null && (
         <p className="mt-2 text-center text-xs text-slate-400">
-          Elige una alternativa para continuar.
+          Elige una alternativa —o «No lo sé»— para continuar.
         </p>
       )}
     </section>
@@ -529,6 +572,20 @@ function QuizScreen({
 interface ResultScreenProps {
   result: DiagnosticResult;
   onRetry: () => void;
+}
+
+/** Una pregunta del repaso, con el motivo por el que llegó ahí. */
+interface ReviewItem {
+  question: DiagnosticQuestion;
+  outcome: "wrong" | "skipped";
+}
+
+/** Resuelve ids contra el pool, descartando los que no existan. */
+function toReviewItems(ids: string[], outcome: ReviewItem["outcome"]): ReviewItem[] {
+  return ids
+    .map((id) => getDiagnosticQuestion(id))
+    .filter((question): question is DiagnosticQuestion => question !== null)
+    .map((question) => ({ question, outcome }));
 }
 
 /**
@@ -592,6 +649,34 @@ function PlacementBanner({
   );
 }
 
+/** Una cifra del desglose (correctas / incorrectas / omitidas). */
+function ScoreTile({
+  emoji,
+  label,
+  value,
+  tone,
+}: {
+  emoji: string;
+  label: string;
+  value: number;
+  tone: "emerald" | "rose" | "amber";
+}): ReactNode {
+  const tones = {
+    emerald: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    rose: "border-rose-200 bg-rose-50 text-rose-800",
+    amber: "border-amber-200 bg-amber-50 text-amber-800",
+  } as const;
+
+  return (
+    <div className={`rounded-xl border px-2 py-2.5 ${tones[tone]}`}>
+      <p className="text-lg font-bold leading-tight">
+        <span aria-hidden="true">{emoji}</span> {value}
+      </p>
+      <p className="text-[11px] font-medium opacity-80">{label}</p>
+    </div>
+  );
+}
+
 /**
  * Desglose de UNA categoría: nivel obtenido, cifras del intento, qué se
  * convalidó y el enlace directo a esa parte de la ruta.
@@ -635,6 +720,15 @@ function CategoryResultCard({
           </div>
         </div>
 
+        {/* Desglose: correctas, incorrectas y omitidas. Las tres suman el total,
+            y las dos últimas puntúan igual (cero): se separan porque no dicen lo
+            mismo sobre lo que el estudiante sabe. */}
+        <div className="mx-auto mt-3 grid max-w-sm grid-cols-3 gap-2">
+          <ScoreTile emoji="✓" label="Correctas" value={result.correctCount} tone="emerald" />
+          <ScoreTile emoji="✗" label="Incorrectas" value={result.incorrectCount} tone="rose" />
+          <ScoreTile emoji="➖" label="Omitidas" value={result.skippedCount} tone="amber" />
+        </div>
+
         <div
           className="mx-auto mt-4 h-2.5 max-w-sm overflow-hidden rounded-full bg-emerald-100"
           role="progressbar"
@@ -669,13 +763,13 @@ function CategoryResultCard({
 
 function ResultScreen({ result, onRetry }: ResultScreenProps): ReactNode {
   const isOnly = result.categories.length === 1;
-  // El repaso junta lo fallado de todas las categorías evaluadas, cada pregunta
-  // con su chip de tema: el diagnóstico también enseña.
-  const missed = result.categories.flatMap((category) =>
-    category.wrongQuestionIds
-      .map((id) => getDiagnosticQuestion(id))
-      .filter((q): q is DiagnosticQuestion => q !== null),
-  );
+  // El repaso junta todo lo que no se acertó —errado u omitido— de todas las
+  // categorías evaluadas: el diagnóstico también enseña, y una pregunta que se
+  // omitió por no saberla es justamente la que más conviene repasar.
+  const review: ReviewItem[] = result.categories.flatMap((category) => [
+    ...toReviewItems(category.wrongQuestionIds, "wrong"),
+    ...toReviewItems(category.skippedQuestionIds, "skipped"),
+  ]);
 
   return (
     <section>
@@ -707,18 +801,33 @@ function ResultScreen({ result, onRetry }: ResultScreenProps): ReactNode {
         Tu nivel quedó guardado: el tutor ya adapta sus explicaciones.
       </p>
 
-      {/* Repaso de lo fallado. */}
-      {missed.length > 0 && (
+      {/* Conceptos a repasar: lo errado y lo omitido, con su explicación. */}
+      {review.length > 0 && (
         <div className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
           <h3 className="text-sm font-bold text-slate-900">
-            📌 Repasa lo que se te escapó ({missed.length})
+            📌 Conceptos a repasar ({review.length})
           </h3>
+          <p className="mt-1 text-xs leading-relaxed text-slate-500">
+            Lo que fallaste y lo que preferiste omitir. Aquí no hay puntaje en juego: es la
+            parte del test que enseña.
+          </p>
           <ul className="mt-3 flex flex-col gap-3">
-            {missed.map((question) => (
+            {review.map(({ question, outcome }) => (
               <li key={question.id} className="rounded-xl bg-slate-50 px-4 py-3">
-                <span className="inline-flex rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-slate-500">
-                  {TOPIC_LABELS[question.topic]}
-                </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span
+                    className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                      outcome === "skipped"
+                        ? "bg-amber-100 text-amber-800"
+                        : "bg-rose-100 text-rose-800"
+                    }`}
+                  >
+                    {outcome === "skipped" ? "➖ Omitida" : "✗ Incorrecta"}
+                  </span>
+                  <span className="inline-flex rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-slate-500">
+                    {TOPIC_LABELS[question.topic]}
+                  </span>
+                </div>
                 <p className="mt-1.5 text-sm font-medium text-slate-800">{question.prompt}</p>
                 <p className="mt-1.5 text-xs font-medium text-emerald-800">
                   Respuesta correcta: {question.options[question.correctIndex]}

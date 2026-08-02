@@ -11,6 +11,7 @@ import {
   getDiagnosticQuestion,
   isDiagnosticDepth,
   isDiagnosticScope,
+  isSkippedAnswer,
   levelForAccuracy,
   questionCategory,
   type DiagnosticCategory,
@@ -30,7 +31,14 @@ import type {
   FinancialLevel,
 } from "@/lib/types";
 
-/** Una respuesta tal como la manda el cliente al terminar el test. */
+/**
+ * Una respuesta tal como la manda el cliente al terminar el test.
+ *
+ * `selectedIndex` es el índice de la alternativa elegida, o `SKIPPED_ANSWER`
+ * (-1) si el estudiante pulsó "No lo sé / Omitir". El servidor no confía en ese
+ * valor concreto: cualquier índice que no apunte a una alternativa real de la
+ * pregunta se trata como omitida (ver `isSkippedAnswer`).
+ */
 export interface DiagnosticAnswer {
   questionId: string;
   selectedIndex: number;
@@ -79,10 +87,14 @@ export async function saveDiagnosticResult(
     return { ok: false, error: "Hay respuestas duplicadas. Inténtalo de nuevo." };
   }
 
-  // Corrección: cada respuesta cae en el saco de la categoría de SU pregunta.
-  const scored = new Map<DiagnosticCategory, { correct: number; wrong: string[] }>(
-    categories.map((category) => [category, { correct: 0, wrong: [] }]),
-  );
+  // Corrección: cada respuesta cae en el saco de la categoría de SU pregunta y
+  // en uno de los tres cubos (acertada, errada u omitida). Omitir puntúa cero
+  // igual que errar —solo la certeza positiva convalida lecciones—, pero se
+  // registra aparte para poder mostrárselo al estudiante y llevarlo al repaso.
+  const scored = new Map<
+    DiagnosticCategory,
+    { correct: number; wrong: string[]; skipped: string[] }
+  >(categories.map((category) => [category, { correct: 0, wrong: [], skipped: [] }]));
 
   for (const answer of answers) {
     const question = getDiagnosticQuestion(answer.questionId);
@@ -95,7 +107,8 @@ export async function saveDiagnosticResult(
       // decidir a qué nivel afecta, así que se rechaza entero.
       return { ok: false, error: "El test mezcla categorías. Inténtalo de nuevo." };
     }
-    if (answer.selectedIndex === question.correctIndex) bucket.correct += 1;
+    if (isSkippedAnswer(question, answer.selectedIndex)) bucket.skipped.push(question.id);
+    else if (answer.selectedIndex === question.correctIndex) bucket.correct += 1;
     else bucket.wrong.push(question.id);
   }
 
@@ -103,7 +116,7 @@ export async function saveDiagnosticResult(
   // cuadra, el porcentaje no sería comparable con los umbrales de nivel.
   for (const category of categories) {
     const bucket = scored.get(category)!;
-    if (bucket.correct + bucket.wrong.length !== perCategory) {
+    if (bucket.correct + bucket.wrong.length + bucket.skipped.length !== perCategory) {
       return { ok: false, error: "El test llegó incompleto. Inténtalo de nuevo." };
     }
   }
@@ -158,15 +171,20 @@ export async function saveDiagnosticResult(
     results.push({
       category,
       correctCount: bucket.correct,
+      incorrectCount: bucket.wrong.length,
+      skippedCount: bucket.skipped.length,
       total: perCategory,
       accuracy: categoryAccuracy.get(category)!,
       level,
       wrongQuestionIds: bucket.wrong,
+      skippedQuestionIds: bucket.skipped,
       placement: await applyPlacement(supabase, user.id, category, level),
     });
   }
 
   const correctCount = results.reduce((sum, r) => sum + r.correctCount, 0);
+  const incorrectCount = results.reduce((sum, r) => sum + r.incorrectCount, 0);
+  const skippedCount = results.reduce((sum, r) => sum + r.skippedCount, 0);
   const total = perCategory * categories.length;
 
   await logEvent(supabase, user.id, "diagnostic_completed", {
@@ -174,10 +192,14 @@ export async function saveDiagnosticResult(
     depth,
     level: overall,
     accuracy: Math.round((correctCount / total) * 100),
+    // Las omitidas se registran aparte: una tasa alta de "no lo sé" en un tema
+    // dice algo distinto que una tasa alta de errores, y conviene poder verlo.
+    skipped: skippedCount,
     categories: results.map((r) => ({
       category: r.category,
       accuracy: r.accuracy,
       level: r.level,
+      skipped: r.skippedCount,
       validated_now: r.placement.validatedNow,
     })),
   });
@@ -193,6 +215,8 @@ export async function saveDiagnosticResult(
       scope,
       level: overall,
       correctCount,
+      incorrectCount,
+      skippedCount,
       total,
       accuracy: Math.round((correctCount / total) * 100),
       categories: results,

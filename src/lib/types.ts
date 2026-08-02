@@ -148,12 +148,21 @@ export interface DiagnosticPlacement {
 export interface DiagnosticCategoryResult {
   category: DiagnosticCategory;
   correctCount: number;
+  /** Respondidas con una alternativa equivocada. */
+  incorrectCount: number;
+  /** Marcadas como "No lo sé / Omitir". Puntúan cero, igual que un error. */
+  skippedCount: number;
   total: number;
-  /** Aciertos en porcentaje (0–100), redondeado. */
+  /**
+   * Aciertos en porcentaje (0–100), redondeado sobre el TOTAL de preguntas: las
+   * omitidas están en el denominador, así que declarar duda nunca infla el nivel.
+   */
   accuracy: number;
   level: FinancialLevel;
   /** Ids de las preguntas falladas, para repasarlas en la pantalla de resultado. */
   wrongQuestionIds: string[];
+  /** Ids de las omitidas; también van al repaso, que para eso el test enseña. */
+  skippedQuestionIds: string[];
   /** Módulos de esta categoría convalidados por el nivel (ver `lib/placement`). */
   placement: DiagnosticPlacement;
 }
@@ -171,8 +180,10 @@ export interface DiagnosticResult {
    * Resume los niveles por categoría, incluidos los que ya estaban medidos.
    */
   level: FinancialLevel;
-  /** Aciertos sumando todas las categorías del intento. */
+  /** Desglose sumando todas las categorías del intento. */
   correctCount: number;
+  incorrectCount: number;
+  skippedCount: number;
   total: number;
   accuracy: number;
   /** Desglose por categoría, en el orden en que se respondieron. */
