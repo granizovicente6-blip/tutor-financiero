@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, type ReactNode } from "react";
+import { NumberField } from "@/components/simulators/NumberField";
 import { formatCurrency, splitBudget5030020 } from "@/lib/finance";
 
 // ---------------------------------------------------------------------------
@@ -51,13 +52,15 @@ const CATEGORIES: Category[] = [
 
 const DEFAULT_PCT = { needs: 50, wants: 30, savings: 20 };
 
-function clampPct(value: number): number {
-  if (Number.isNaN(value)) return 0;
-  return Math.min(Math.max(Math.round(value), 0), 100);
-}
+/**
+ * Tope del ingreso mensual, en pesos chilenos (la moneda de la app). Un único
+ * valor para el campo y el slider: antes el input decía 20.000 y el saneado
+ * recortaba a 1.000.000, así que ninguno de los dos era el límite real.
+ */
+const MAX_INCOME = 20_000_000;
 
 export function BudgetSimulator(): ReactNode {
-  const [income, setIncome] = useState<number>(3000);
+  const [income, setIncome] = useState<number>(1_200_000);
   const [pct, setPct] = useState<Record<Category["key"], number>>(DEFAULT_PCT);
 
   const total = pct.needs + pct.wants + pct.savings;
@@ -66,16 +69,8 @@ export function BudgetSimulator(): ReactNode {
   // Reparto recomendado (referencia fija 50/30/20) según el ingreso.
   const recommended = useMemo(() => splitBudget5030020(income), [income]);
 
-  function setIncomeSafe(raw: string): void {
-    const parsed = Number(raw);
-    if (Number.isNaN(parsed)) return;
-    setIncome(Math.min(Math.max(parsed, 0), 1_000_000));
-  }
-
-  function setCategoryPct(key: Category["key"], raw: string): void {
-    const parsed = Number(raw);
-    if (Number.isNaN(parsed)) return;
-    setPct((prev) => ({ ...prev, [key]: clampPct(parsed) }));
+  function setCategoryPct(key: Category["key"], value: number): void {
+    setPct((prev) => ({ ...prev, [key]: Math.round(value) }));
   }
 
   function reset(): void {
@@ -90,70 +85,34 @@ export function BudgetSimulator(): ReactNode {
 
         {/* Ingreso */}
         <div className="mb-5">
-          <div className="mb-1.5 flex items-center justify-between">
-            <label className="text-sm font-medium text-slate-700">Ingreso neto mensual</label>
-            <input
-              type="number"
-              inputMode="numeric"
-              aria-label="Ingreso neto mensual"
-              value={income}
-              min={0}
-              max={20000}
-              step={100}
-              onChange={(e) => setIncomeSafe(e.target.value)}
-              className="w-28 rounded-lg border border-slate-300 bg-slate-50 px-2 py-1 text-right text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
-            />
-          </div>
-          <input
-            type="range"
-            value={Math.min(income, 20000)}
+          <NumberField
+            label="Ingreso neto mensual"
+            value={income}
             min={0}
-            max={20000}
-            step={100}
-            onChange={(e) => setIncomeSafe(e.target.value)}
-            className="w-full accent-emerald-600"
-            aria-label="Ingreso neto mensual"
+            max={MAX_INCOME}
+            step={10_000}
+            hint={`${formatCurrency(income)} / mes`}
+            onChange={setIncome}
           />
-          <p className="mt-0.5 text-right text-[11px] text-slate-400">
-            {formatCurrency(income)} / mes
-          </p>
         </div>
 
         {/* Porcentajes por categoría */}
         <div className="flex flex-col gap-4">
           {CATEGORIES.map((cat) => (
-            <div key={cat.key}>
-              <div className="mb-1.5 flex items-center justify-between">
-                <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
-                  <span className={`inline-block h-2.5 w-2.5 rounded-sm ${cat.dotClass}`} />
-                  {cat.label}
-                </label>
-                <div className="flex items-center gap-1">
-                  <input
-                    type="number"
-                    inputMode="numeric"
-                    aria-label={`Porcentaje de ${cat.label}`}
-                    value={pct[cat.key]}
-                    min={0}
-                    max={100}
-                    step={1}
-                    onChange={(e) => setCategoryPct(cat.key, e.target.value)}
-                    className="w-16 rounded-lg border border-slate-300 bg-slate-50 px-2 py-1 text-right text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
-                  />
-                  <span className="w-4 text-sm text-slate-400">%</span>
-                </div>
-              </div>
-              <input
-                type="range"
-                value={pct[cat.key]}
-                min={0}
-                max={100}
-                step={1}
-                onChange={(e) => setCategoryPct(cat.key, e.target.value)}
-                className="w-full accent-emerald-600"
-                aria-label={`Porcentaje de ${cat.label}`}
-              />
-            </div>
+            <NumberField
+              key={cat.key}
+              label={cat.label}
+              icon={
+                <span className={`inline-block h-2.5 w-2.5 rounded-sm ${cat.dotClass}`} />
+              }
+              value={pct[cat.key]}
+              min={0}
+              max={100}
+              step={1}
+              suffix="%"
+              inputWidthClass="w-16"
+              onChange={(value) => setCategoryPct(cat.key, value)}
+            />
           ))}
         </div>
 

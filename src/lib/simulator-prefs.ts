@@ -28,9 +28,16 @@ import {
  */
 export const SIMULATOR_PREFS_KEY = "tutor-financiero:simulador-uf:v1";
 
-/** Topes de los sliders. Viven aquí porque también acotan lo que se relee. */
-export const MAX_INITIAL_CLP = 200_000_000;
-export const MAX_MONTHLY_CLP = 5_000_000;
+/**
+ * Topes de los sliders. Viven aquí porque también acotan lo que se relee.
+ *
+ * Son deliberadamente altos: el simulador tiene que servir tanto a quien parte
+ * con $0 como a quien vende una propiedad y reinvierte. Quien necesite una
+ * cifra exacta la escribe en el campo, que admite cualquier valor del rango; el
+ * slider solo da el barrido grueso.
+ */
+export const MAX_INITIAL_CLP = 500_000_000;
+export const MAX_MONTHLY_CLP = 10_000_000;
 
 /** Los parámetros que el usuario elige y que merece la pena recordar. */
 export interface SimulatorPrefs {

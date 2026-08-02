@@ -2,78 +2,22 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { GrowthChart } from "@/components/charts/GrowthChart";
+import { NumberField } from "@/components/simulators/NumberField";
 import { formatCurrency, projectCompoundInterest } from "@/lib/finance";
 
 // ---------------------------------------------------------------------------
-// Campo con slider + entrada numérica sincronizados
-// ---------------------------------------------------------------------------
-interface FieldProps {
-  label: string;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  unit?: string;
-  displayValue: string;
-  onChange: (value: number) => void;
-}
-
-function Field({
-  label,
-  value,
-  min,
-  max,
-  step,
-  unit,
-  displayValue,
-  onChange,
-}: FieldProps): ReactNode {
-  function handle(raw: string): void {
-    const parsed = Number(raw);
-    if (Number.isNaN(parsed)) return;
-    onChange(Math.min(Math.max(parsed, min), max));
-  }
-
-  return (
-    <div>
-      <div className="mb-1.5 flex items-center justify-between">
-        <label className="text-sm font-medium text-slate-700">{label}</label>
-        <div className="flex items-center gap-1">
-          <input
-            type="number"
-            inputMode="decimal"
-            aria-label={label}
-            value={value}
-            min={min}
-            max={max}
-            step={step}
-            onChange={(e) => handle(e.target.value)}
-            className="w-24 rounded-lg border border-slate-300 bg-slate-50 px-2 py-1 text-right text-sm text-slate-900 outline-none focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
-          />
-          {unit && <span className="w-6 text-sm text-slate-400">{unit}</span>}
-        </div>
-      </div>
-      <input
-        type="range"
-        value={value}
-        min={min}
-        max={max}
-        step={step}
-        onChange={(e) => handle(e.target.value)}
-        className="w-full accent-emerald-600"
-        aria-label={label}
-      />
-      <p className="mt-0.5 text-right text-[11px] text-slate-400">{displayValue}</p>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Simulador de interés compuesto / proyección de ahorro
+//
+// Los topes están pensados para pesos chilenos, la moneda de la app: encerrar
+// el aporte inicial en cinco cifras dejaba fuera cualquier caso real.
 // ---------------------------------------------------------------------------
+
+const MAX_PRINCIPAL = 500_000_000;
+const MAX_MONTHLY = 10_000_000;
+
 export function CompoundInterestSimulator(): ReactNode {
-  const [principal, setPrincipal] = useState<number>(1000);
-  const [monthlyContribution, setMonthlyContribution] = useState<number>(100);
+  const [principal, setPrincipal] = useState<number>(1_000_000);
+  const [monthlyContribution, setMonthlyContribution] = useState<number>(100_000);
   const [annualRatePct, setAnnualRatePct] = useState<number>(7);
   const [years, setYears] = useState<number>(20);
 
@@ -99,42 +43,45 @@ export function CompoundInterestSimulator(): ReactNode {
       <section className="w-full rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:w-80 lg:flex-none">
         <h2 className="mb-4 text-sm font-semibold text-slate-900">Tus supuestos</h2>
         <div className="flex flex-col gap-5">
-          <Field
+          <NumberField
             label="Aporte inicial"
             value={principal}
             min={0}
-            max={100000}
-            step={100}
-            displayValue={formatCurrency(principal)}
+            max={MAX_PRINCIPAL}
+            step={100_000}
+            hint={formatCurrency(principal)}
             onChange={setPrincipal}
           />
-          <Field
+          <NumberField
             label="Aporte mensual"
             value={monthlyContribution}
             min={0}
-            max={5000}
-            step={50}
-            displayValue={`${formatCurrency(monthlyContribution)} / mes`}
+            max={MAX_MONTHLY}
+            step={10_000}
+            hint={`${formatCurrency(monthlyContribution)} / mes`}
             onChange={setMonthlyContribution}
           />
-          <Field
+          <NumberField
             label="Tasa anual"
             value={annualRatePct}
             min={0}
             max={20}
             step={0.5}
-            unit="%"
-            displayValue={`${annualRatePct}% anual (supuesto)`}
+            decimals
+            suffix="%"
+            inputWidthClass="w-20"
+            hint={`${annualRatePct}% anual (supuesto)`}
             onChange={setAnnualRatePct}
           />
-          <Field
+          <NumberField
             label="Horizonte"
             value={years}
             min={1}
             max={50}
             step={1}
-            unit="a"
-            displayValue={`${years} ${years === 1 ? "año" : "años"}`}
+            suffix="años"
+            inputWidthClass="w-20"
+            hint={`${years} ${years === 1 ? "año" : "años"}`}
             onChange={setYears}
           />
         </div>

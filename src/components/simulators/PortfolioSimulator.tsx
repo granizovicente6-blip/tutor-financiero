@@ -32,6 +32,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { PortfolioChart } from "@/components/charts/PortfolioChart";
+import { NumberField } from "@/components/simulators/NumberField";
 import {
   assessFinancialFreedom,
   buildScenarios,
@@ -88,74 +89,6 @@ const SOLID_TARGET_CAPITAL = capitalForMonthlyIncome(SOLID_RETIREMENT_INCOME_CLP
 // ===========================================================================
 // Piezas de interfaz reutilizadas dentro del simulador
 // ===========================================================================
-
-/** Campo numérico con slider e input sincronizados. */
-interface MoneyFieldProps {
-  label: string;
-  icon: ReactNode;
-  value: number;
-  min: number;
-  max: number;
-  step: number;
-  /** Texto bajo el campo (equivalencia en UF, "/mes", …). */
-  hint: string;
-  suffix?: string;
-  onChange: (value: number) => void;
-}
-
-function MoneyField({
-  label,
-  icon,
-  value,
-  min,
-  max,
-  step,
-  hint,
-  suffix,
-  onChange,
-}: MoneyFieldProps): ReactNode {
-  function handle(raw: string): void {
-    const parsed = Number(raw);
-    if (Number.isNaN(parsed)) return;
-    onChange(Math.min(Math.max(parsed, min), max));
-  }
-
-  return (
-    <div>
-      <div className="mb-1.5 flex items-center justify-between gap-2">
-        <label className="flex items-center gap-1.5 text-sm font-medium text-slate-700">
-          <span className="text-slate-400">{icon}</span>
-          {label}
-        </label>
-        <div className="flex items-center gap-1">
-          <input
-            type="number"
-            inputMode="numeric"
-            aria-label={label}
-            value={value}
-            min={min}
-            max={max}
-            step={step}
-            onChange={(e) => handle(e.target.value)}
-            className="w-28 rounded-lg border border-slate-300 bg-slate-50 px-2 py-1 text-right text-sm tabular-nums text-slate-900 outline-none transition focus:border-emerald-500 focus:ring-2 focus:ring-emerald-200"
-          />
-          {suffix && <span className="w-8 text-xs text-slate-400">{suffix}</span>}
-        </div>
-      </div>
-      <input
-        type="range"
-        value={value}
-        min={min}
-        max={max}
-        step={step}
-        aria-label={label}
-        onChange={(e) => handle(e.target.value)}
-        className="w-full accent-emerald-600"
-      />
-      <p className="mt-0.5 text-right text-[11px] text-slate-400">{hint}</p>
-    </div>
-  );
-}
 
 /** Tarjeta de resumen del bloque de resultados. */
 interface SummaryCardProps {
@@ -439,7 +372,7 @@ export function PortfolioSimulator({
               )}
             </div>
             <div className="flex flex-col gap-5">
-              <MoneyField
+              <NumberField
                 label="Capital inicial"
                 icon={<PiggyBank className="h-3.5 w-3.5" aria-hidden="true" />}
                 value={initialClp}
@@ -449,7 +382,7 @@ export function PortfolioSimulator({
                 hint={`${formatClp(initialClp)} · ${formatClpAsUf(initialClp)}`}
                 onChange={(value) => updateParams({ initialClp: value })}
               />
-              <MoneyField
+              <NumberField
                 label="Aporte mensual"
                 icon={<Wallet className="h-3.5 w-3.5" aria-hidden="true" />}
                 value={monthlyClp}
@@ -460,7 +393,7 @@ export function PortfolioSimulator({
                 onChange={(value) => updateParams({ monthlyClp: value })}
               />
               <div>
-                <MoneyField
+                <NumberField
                   label="Horizonte"
                   icon={<CalendarClock className="h-3.5 w-3.5" aria-hidden="true" />}
                   value={effectiveYears}
