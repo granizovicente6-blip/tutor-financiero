@@ -3,7 +3,12 @@ import { ChatApp } from "@/components/ChatApp";
 import { Landing } from "@/components/Landing";
 import { getCurriculumStats } from "@/lib/curriculum";
 import { getFreeLessonSlugs } from "@/lib/progression";
-import { formatPlanPrice, PREMIUM_PLAN } from "@/lib/subscription";
+import {
+  formatPlanPrice,
+  getSubscription,
+  hasPremiumAccess,
+  PREMIUM_PLAN,
+} from "@/lib/subscription";
 import type { Conversation, FinancialLevel, StreakInfo } from "@/lib/types";
 
 /**
@@ -33,7 +38,7 @@ export default async function Home() {
     );
   }
 
-  const [{ data: conversations }, { data: profile }] = await Promise.all([
+  const [{ data: conversations }, { data: profile }, subscription] = await Promise.all([
     supabase
       .from("conversations")
       .select("id, title, created_at")
@@ -43,6 +48,7 @@ export default async function Home() {
       .select("financial_level, current_streak, longest_streak")
       .eq("id", user.id)
       .maybeSingle(),
+    getSubscription(supabase, user.id),
   ]);
 
   const streak: StreakInfo = {
@@ -56,6 +62,7 @@ export default async function Home() {
       userEmail={user.email ?? ""}
       initialLevel={(profile?.financial_level ?? null) as FinancialLevel | null}
       streak={streak}
+      isPremium={hasPremiumAccess(subscription)}
     />
   );
 }

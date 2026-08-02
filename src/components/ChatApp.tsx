@@ -121,6 +121,8 @@ interface ChatAppProps {
   initialLevel: FinancialLevel | null;
   /** Racha de estudio; se renderiza directo desde props para reflejar cambios. */
   streak: StreakInfo;
+  /** True si la membresía está activa: cambia el CTA por un distintivo. */
+  isPremium: boolean;
 }
 
 export function ChatApp({
@@ -128,6 +130,7 @@ export function ChatApp({
   userEmail,
   initialLevel,
   streak,
+  isPremium,
 }: ChatAppProps) {
   const [supabase] = useState(() => createClient());
 
@@ -448,6 +451,27 @@ export function ChatApp({
               </h1>
             </div>
             <div className="flex flex-none items-center gap-2">
+              {/* CTA a la suscripción: el punto de entrada al plan desde el chat.
+                  Con membresía activa se cambia por un distintivo, igual que en
+                  la cabecera de la ruta de aprendizaje. */}
+              {isPremium ? (
+                <span
+                  className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-xs font-semibold text-amber-900"
+                  title="Membresía Premium activa"
+                >
+                  👑 Premium
+                </span>
+              ) : (
+                <Link
+                  href="/pricing"
+                  title="Ver los planes y hacerte Premium"
+                  className="inline-flex items-center gap-1 whitespace-nowrap rounded-full bg-gradient-to-r from-amber-500 to-orange-500 px-2.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:from-amber-600 hover:to-orange-600 focus:outline-none focus:ring-2 focus:ring-amber-300 sm:px-3.5 sm:text-sm"
+                >
+                  <span aria-hidden="true">⚡</span>
+                  <span className="sm:hidden">Premium</span>
+                  <span className="hidden sm:inline">Hacerse Premium</span>
+                </Link>
+              )}
               {streak.current > 0 && (
                 <span
                   className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-1 text-xs font-semibold text-orange-700"
