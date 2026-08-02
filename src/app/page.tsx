@@ -1,14 +1,17 @@
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { ChatApp } from "@/components/ChatApp";
+import { Landing } from "@/components/Landing";
+import { getCurriculumStats } from "@/lib/curriculum";
+import { getFreeLessonSlugs } from "@/lib/progression";
+import { formatPlanPrice, PREMIUM_PLAN } from "@/lib/subscription";
 import type { Conversation, FinancialLevel, StreakInfo } from "@/lib/types";
 
 /**
- * Página principal (Server Component).
- * - Exige sesión: si no hay usuario, redirige a /login (defensa en profundidad
- *   además del middleware).
- * - Carga las conversaciones del usuario para la barra lateral.
- * - Renderiza la app de chat (cliente) con esos datos iniciales.
+ * Página principal (Server Component). Es pública: la puerta de entrada del
+ * modelo guest-first.
+ *
+ * - Sin sesión: portada informativa con los CTA hacia registro/login.
+ * - Con sesión: la app de chat, con las conversaciones del usuario ya cargadas.
  */
 export default async function Home() {
   const supabase = await createClient();
@@ -17,7 +20,17 @@ export default async function Home() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login");
+    const { lessonCount, moduleCount } = getCurriculumStats();
+    return (
+      <Landing
+        isAuthenticated={false}
+        lessonCount={lessonCount}
+        moduleCount={moduleCount}
+        freeLessonCount={getFreeLessonSlugs().size}
+        priceLabel={formatPlanPrice()}
+        currencyLabel={PREMIUM_PLAN.currencyId}
+      />
+    );
   }
 
   const [{ data: conversations }, { data: profile }] = await Promise.all([

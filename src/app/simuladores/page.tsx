@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { loginPath } from "@/lib/auth-redirect";
 
 /**
  * Landing de Simuladores (Server Component).
@@ -41,7 +42,7 @@ export default async function SimuladoresPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/login");
+    redirect(loginPath("/simuladores"));
   }
 
   return (

@@ -3619,6 +3619,23 @@ export function getAllModules(): Module[] {
   return LEARNING_PATHS.flatMap((path) => path.modules);
 }
 
+/** Tamaño del programa, tal como lo anuncian la portada y la página de precios. */
+export interface CurriculumStats {
+  lessonCount: number;
+  moduleCount: number;
+}
+
+/**
+ * Cifras del currículum real. Se calculan (no se escriben a mano) para que la
+ * oferta pública no se desalinee del contenido al ampliarlo.
+ */
+export function getCurriculumStats(): CurriculumStats {
+  return {
+    lessonCount: getAllLessons().length,
+    moduleCount: getAllModules().length,
+  };
+}
+
 /**
  * Módulos de una categoría concreta, conservando la ruta a la que pertenecen
  * (útil para mostrar el origen del módulo al agrupar por categoría en la UI).

@@ -2,20 +2,22 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { resolveRedirectTo } from "@/lib/auth-redirect";
 import type { AuthState } from "@/lib/types";
 
 /**
  * Server Action: registra un nuevo usuario con email y contraseña.
  *
  * Comportamiento según la configuración de Supabase Auth:
- *  - Si la confirmación por correo está DESACTIVADA: se crea la sesión y
- *    redirigimos a la app (`/`).
+ *  - Si la confirmación por correo está DESACTIVADA: se crea la sesión y se
+ *    redirige al destino pedido (`redirectTo`) o a la ruta de aprendizaje.
  *  - Si está ACTIVADA (por defecto): no hay sesión aún; devolvemos un mensaje
  *    pidiendo al usuario que confirme su correo antes de iniciar sesión.
  */
 export async function register(_prev: AuthState, formData: FormData): Promise<AuthState> {
   const email = String(formData.get("email") ?? "").trim();
   const password = String(formData.get("password") ?? "");
+  const target = resolveRedirectTo(formData.get("redirectTo")?.toString());
 
   if (!email || !password) {
     return { error: "Introduce tu correo y contraseña." };
@@ -36,7 +38,7 @@ export async function register(_prev: AuthState, formData: FormData): Promise<Au
 
   // Sesión presente => confirmación desactivada => entrar directo.
   if (data.session) {
-    redirect("/");
+    redirect(target);
   }
 
   return {

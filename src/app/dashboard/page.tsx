@@ -12,6 +12,7 @@ import {
   getPreviousLessonInCategory,
 } from "@/lib/progression";
 import { getSubscription, hasPremiumAccess } from "@/lib/subscription";
+import { loginPath } from "@/lib/auth-redirect";
 import type { LessonProgress } from "@/lib/types";
 
 interface DashboardPageProps {
@@ -59,7 +60,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login");
+    redirect(loginPath("/dashboard"));
   }
 
   const [{ data }, subscription] = await Promise.all([

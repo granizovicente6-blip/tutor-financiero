@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import { DEFAULT_AFTER_LOGIN, registerPath } from "@/lib/auth-redirect";
 import type { SubscriptionStatus } from "@/lib/types";
 
 /** Ventaja del plan, tal como se lista en la tarjeta. */
@@ -12,6 +13,8 @@ export interface PlanBenefit {
 }
 
 interface PricingProps {
+  /** False para el visitante anónimo: la página es pública, el pago no. */
+  isAuthenticated: boolean;
   /** Precio ya formateado ("$9.900"): el formato lo decide el servidor. */
   priceLabel: string;
   currencyLabel: string;
@@ -34,6 +37,7 @@ interface PricingProps {
 }
 
 export function Pricing({
+  isAuthenticated,
   priceLabel,
   currencyLabel,
   planName,
@@ -96,10 +100,10 @@ export function Pricing({
             </h1>
           </div>
           <Link
-            href="/dashboard"
+            href={isAuthenticated ? DEFAULT_AFTER_LOGIN : "/"}
             className="rounded-lg px-3 py-1.5 text-sm font-medium text-emerald-700 transition hover:bg-emerald-50"
           >
-            ← Volver a mi ruta
+            {isAuthenticated ? "← Volver a mi ruta" : "← Volver al inicio"}
           </Link>
         </div>
       </header>
@@ -206,11 +210,26 @@ export function Pricing({
           <div className="border-t border-slate-100 px-6 py-6">
             {hasPremium ? (
               <Link
-                href="/dashboard"
+                href={DEFAULT_AFTER_LOGIN}
                 className="flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white transition hover:bg-emerald-700"
               >
                 Ir a mi ruta de aprendizaje <span aria-hidden="true">→</span>
               </Link>
+            ) : !isAuthenticated ? (
+              /* Visitante anónimo: el pago necesita una cuenta a la que
+                 asociarse, así que primero se registra y vuelve aquí. */
+              <>
+                <Link
+                  href={registerPath("/pricing")}
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+                >
+                  Crear mi cuenta gratis <span aria-hidden="true">→</span>
+                </Link>
+                <p className="mt-3 text-center text-[11px] text-slate-500">
+                  Empieza con las {freeLessonCount} lecciones gratuitas. Podrás suscribirte
+                  desde aquí cuando quieras el programa completo.
+                </p>
+              </>
             ) : (
               <>
                 <button

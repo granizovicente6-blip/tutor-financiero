@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { isProtectedPath, REDIRECT_PARAM } from "@/lib/auth-redirect";
 
 /**
  * Refresca la sesión de Supabase en cada petición y protege las rutas.
@@ -7,8 +8,8 @@ import { NextResponse, type NextRequest } from "next/server";
  * Se ejecuta desde `src/middleware.ts`. Cumple dos funciones:
  *  1. Mantener las cookies de sesión (access/refresh token) frescas, para que
  *     tanto Server Components como Route Handlers vean al usuario autenticado.
- *  2. Redirigir a `/login` a los usuarios no autenticados que intenten acceder
- *     a páginas protegidas.
+ *  2. Redirigir a `/login?redirectTo=…` a los usuarios no autenticados que
+ *     intenten acceder a las rutas protegidas (ver `lib/auth-redirect`).
  *
  * IMPORTANTE (patrón oficial de @supabase/ssr): no ejecutar lógica entre
  * `createServerClient` y `getUser()`, y devolver siempre `supabaseResponse`
@@ -40,19 +41,19 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
+  const { pathname, search } = request.nextUrl;
 
-  // Rutas públicas: login, register, callbacks de auth y las rutas de API
-  // (que se autoprotegen devolviendo 401 en vez de redirigir).
-  const isPublic =
-    pathname.startsWith("/login") ||
-    pathname.startsWith("/register") ||
-    pathname.startsWith("/auth") ||
-    pathname.startsWith("/api");
-
-  if (!user && !isPublic) {
+  // Modelo guest-first: el sitio es público salvo el área de producto
+  // (`/dashboard`, `/simuladores`). La portada, `/pricing`, las páginas
+  // informativas y las de auth se visitan sin cuenta; las rutas de API se
+  // autoprotegen devolviendo 401 en vez de redirigir.
+  if (!user && isProtectedPath(pathname)) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
+    url.search = "";
+    // Con el destino a cuestas: tras iniciar sesión se retoma donde iba,
+    // conservando también sus parámetros (`?bloqueada=…`, etc.).
+    url.searchParams.set(REDIRECT_PARAM, `${pathname}${search}`);
     return NextResponse.redirect(url);
   }
 

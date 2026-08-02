@@ -4,6 +4,7 @@ import { LessonView } from "@/components/LessonView";
 import { getAdjacentLessons, getLessonBySlug } from "@/lib/curriculum";
 import { buildStatusMap, getLockReason, isLessonUnlocked } from "@/lib/progression";
 import { getSubscription, hasPremiumAccess } from "@/lib/subscription";
+import { loginPath } from "@/lib/auth-redirect";
 import type { LessonProgress, LessonStatus } from "@/lib/types";
 
 interface LessonPageProps {
@@ -29,7 +30,7 @@ export default async function LessonPage({ params }: LessonPageProps) {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/login");
+    redirect(loginPath(`/dashboard/${params.lessonSlug}`));
   }
 
   // Se carga el progreso completo (no solo esta lección) porque el desbloqueo

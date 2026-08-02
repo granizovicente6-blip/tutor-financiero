@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { CompoundInterestSimulator } from "@/components/simulators/CompoundInterestSimulator";
+import { loginPath } from "@/lib/auth-redirect";
 
 /**
  * Simulador de Interés Compuesto / Proyección de Ahorro (Server Component).
@@ -13,7 +14,7 @@ export default async function InteresCompuestoPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/login");
+    redirect(loginPath("/simuladores/interes-compuesto"));
   }
 
   return (

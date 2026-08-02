@@ -1,9 +1,14 @@
-import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { Pricing, type PlanBenefit } from "@/components/Pricing";
-import { CATEGORIES, getAllLessons, getLessonBySlug, getModulesByCategory } from "@/lib/curriculum";
+import { getCurriculumStats, getLessonBySlug } from "@/lib/curriculum";
 import { getFreeLessonSlugs } from "@/lib/progression";
-import { formatPlanPrice, getSubscription, hasPremiumAccess, PREMIUM_PLAN } from "@/lib/subscription";
+import {
+  formatPlanPrice,
+  FREE_SUBSCRIPTION,
+  getSubscription,
+  hasPremiumAccess,
+  PREMIUM_PLAN,
+} from "@/lib/subscription";
 import { isTestMode } from "@/lib/mercadopago";
 
 interface PricingPageProps {
@@ -24,10 +29,12 @@ function formatDate(iso: string | null): string | null {
 }
 
 /**
- * Página de precios (Server Component).
+ * Página de precios (Server Component). Es pública: el precio se puede
+ * consultar sin cuenta.
  *
- * Exige sesión: suscribirse requiere una cuenta a la que asociar el pago (el
- * middleware ya redirige, esto es defensa en profundidad).
+ * Suscribirse sí requiere una cuenta a la que asociar el pago, así que al
+ * visitante anónimo se le muestra el mismo plan pero con un CTA de registro
+ * (ver `isAuthenticated` en `Pricing`).
  *
  * Las cifras del plan (lecciones, módulos) se calculan del currículum real, para
  * que la oferta no se desalinee del contenido al ampliarlo.
@@ -38,17 +45,10 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  if (!user) {
-    redirect("/login");
-  }
+  // Sin sesión no hay perfil que leer: se muestra el estado gratuito.
+  const subscription = user ? await getSubscription(supabase, user.id) : FREE_SUBSCRIPTION;
 
-  const subscription = await getSubscription(supabase, user.id);
-
-  const lessonCount = getAllLessons().length;
-  const moduleCount = CATEGORIES.reduce(
-    (total, category) => total + getModulesByCategory(category).length,
-    0,
-  );
+  const { lessonCount, moduleCount } = getCurriculumStats();
   const freeLessonCount = getFreeLessonSlugs().size;
 
   const benefits: PlanBenefit[] = [
@@ -94,6 +94,7 @@ export default async function PricingPage({ searchParams }: PricingPageProps) {
 
   return (
     <Pricing
+      isAuthenticated={user !== null}
       priceLabel={formatPlanPrice()}
       currencyLabel={PREMIUM_PLAN.currencyId}
       planName={PREMIUM_PLAN.name}

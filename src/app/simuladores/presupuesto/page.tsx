@@ -2,6 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { BudgetSimulator } from "@/components/simulators/BudgetSimulator";
+import { loginPath } from "@/lib/auth-redirect";
 
 /**
  * Simulador Presupuestador 50/30/20 (Server Component).
@@ -13,7 +14,7 @@ export default async function PresupuestoPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/login");
+    redirect(loginPath("/simuladores/presupuesto"));
   }
 
   return (
