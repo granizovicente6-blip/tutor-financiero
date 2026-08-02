@@ -1,7 +1,6 @@
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { DashboardNav } from "@/components/DashboardNav";
 import { PortfolioSimulator } from "@/components/simulators/PortfolioSimulator";
 import { formatPlanPrice, getSubscription, hasPremiumAccess } from "@/lib/subscription";
 import { loginPath } from "@/lib/auth-redirect";
@@ -26,6 +25,10 @@ export const metadata = {
  *
  * Nota de rutas: este segmento estático tiene prioridad sobre `[lessonSlug]`,
  * así que "simulador" nunca se interpreta como el slug de una lección.
+ *
+ * Navegación: esta herramienta cuelga de "Simuladores", no del menú principal.
+ * Por eso no monta `DashboardNav` (igual que sus hermanas en `/simuladores/*`)
+ * y ofrece una miga de pan de vuelta al listado.
  */
 export default async function SimuladorPage() {
   const supabase = await createClient();
@@ -78,7 +81,17 @@ export default async function SimuladorPage() {
         </div>
       </header>
 
-      <DashboardNav active="simulador" />
+      <div className="border-b border-slate-200 bg-white">
+        <div className="mx-auto max-w-5xl px-4">
+          <Link
+            href="/simuladores"
+            className="inline-flex items-center py-2.5 text-sm font-medium text-slate-500 transition hover:text-emerald-800"
+          >
+            <span aria-hidden="true">←</span>
+            <span className="ml-1">🧮 Simuladores</span>
+          </Link>
+        </div>
+      </div>
 
       <main className="mx-auto max-w-5xl px-4 py-6">
         <p className="mb-5 max-w-2xl text-sm leading-relaxed text-slate-600">

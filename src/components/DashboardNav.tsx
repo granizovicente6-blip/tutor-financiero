@@ -11,13 +11,18 @@ import Link from "next/link";
  * o de uno de cliente.
  */
 
-/** Secciones del área de producto. */
-export type DashboardSection = "ruta" | "mercados" | "simulador" | "simuladores";
+/**
+ * Secciones del área de producto.
+ *
+ * El Simulador UF NO es una sección propia: vive dentro de "Simuladores", igual
+ * que el resto de las herramientas, para no repetir la misma entrada dos veces
+ * en la navegación.
+ */
+export type DashboardSection = "ruta" | "mercados" | "simuladores";
 
 const ITEMS: { key: DashboardSection; href: string; label: string; emoji: string }[] = [
   { key: "ruta", href: "/dashboard", label: "Mi ruta", emoji: "📚" },
   { key: "mercados", href: "/dashboard/mercados", label: "Mercados / ETFs", emoji: "📈" },
-  { key: "simulador", href: "/dashboard/simulador", label: "Simulador UF", emoji: "📊" },
   { key: "simuladores", href: "/simuladores", label: "Simuladores", emoji: "🧮" },
 ];
 

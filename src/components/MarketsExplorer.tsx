@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -9,7 +9,18 @@ import {
   RISK_META,
   type Instrument,
   type InstrumentCategory,
+  type RiskLevel,
 } from "@/lib/instruments";
+import {
+  RISK_COLORS,
+  SERIES_COLORS,
+  TREND_PER_YEAR,
+  assumptionsLabel,
+  simulateSeries,
+  type SeriesPoint,
+} from "@/lib/market-series";
+import { MarketChart, type MarketChartSeries } from "@/components/charts/MarketChart";
+import { Sparkline } from "@/components/charts/Sparkline";
 
 // Render del análisis: encabezados compactos y viñetas legibles en el modal.
 const analysisMarkdown: Components = {
@@ -28,6 +39,37 @@ const analysisMarkdown: Components = {
   ),
   em: ({ children }) => <em className="italic text-slate-600">{children}</em>,
 };
+
+// ---------------------------------------------------------------------------
+// Gráfico comparativo: qué se dibuja por defecto
+// ---------------------------------------------------------------------------
+
+/** Cuántas trayectorias se pueden superponer sin que el gráfico se vuelva ilegible. */
+const MAX_SERIES = 4;
+
+/** Horizontes ofrecidos en el selector, en años. */
+const HORIZONS = [3, 5, 10] as const;
+
+/** Años del gráfico de la ficha individual (fijo: la comparación no aplica). */
+const DETAIL_YEARS = 10;
+
+const RISK_ORDER: RiskLevel[] = ["bajo", "moderado", "alto", "muy alto"];
+
+/**
+ * Selección inicial del gráfico: un instrumento por nivel de riesgo (hasta
+ * tres). Comparar un "riesgo bajo" con un "riesgo alto" enseña bastante más
+ * que comparar los tres primeros del catálogo, que suelen ser casi idénticos.
+ */
+function defaultSelection(pool: Instrument[]): string[] {
+  const firstByRisk = new Map<RiskLevel, string>();
+  for (const item of pool) {
+    if (!firstByRisk.has(item.risk)) firstByRisk.set(item.risk, item.ticker);
+  }
+  const byRisk = RISK_ORDER.map((risk) => firstByRisk.get(risk)).filter(
+    (ticker): ticker is string => ticker !== undefined,
+  );
+  return (byRisk.length > 0 ? byRisk : pool.map((item) => item.ticker)).slice(0, 3);
+}
 
 interface MarketsExplorerProps {
   instruments: Instrument[];
@@ -79,6 +121,82 @@ export function MarketsExplorer({
       : instruments.filter((item) => item.category === activeCategory);
 
   const showPaywall = !isPremium || premiumRequired;
+
+  // -------------------------------------------------------------------------
+  // Gráficos de evolución (simulación educativa; ver `lib/market-series`)
+  // -------------------------------------------------------------------------
+
+  /** Horizonte del gráfico comparativo, en años. */
+  const [horizon, setHorizon] = useState<number>(5);
+  /** Instrumentos superpuestos en el gráfico comparativo (máx. `MAX_SERIES`). */
+  const [chartTickers, setChartTickers] = useState<string[]>(() =>
+    defaultSelection(instruments),
+  );
+
+  // Al cambiar de categoría el gráfico se repuebla con lo que hay a la vista:
+  // seguir dibujando un ETF que ya no aparece en la grilla despista más que ayuda.
+  useEffect(() => {
+    const pool =
+      activeCategory === null
+        ? instruments
+        : instruments.filter((item) => item.category === activeCategory);
+    setChartTickers(defaultSelection(pool));
+  }, [activeCategory, instruments]);
+
+  /** Añade o quita una serie del gráfico comparativo. */
+  function toggleTicker(ticker: string) {
+    setChartTickers((current) => {
+      if (current.includes(ticker)) {
+        // Nunca dejar el gráfico vacío: la última serie no se puede quitar.
+        return current.length === 1 ? current : current.filter((item) => item !== ticker);
+      }
+      // Al llegar al tope entra la nueva y sale la más antigua.
+      const next = [...current, ticker];
+      return next.slice(Math.max(0, next.length - MAX_SERIES));
+    });
+  }
+
+  const chartSeries = useMemo<MarketChartSeries[]>(
+    () =>
+      chartTickers
+        .map((ticker, index): MarketChartSeries | null => {
+          const instrument = instruments.find((item) => item.ticker === ticker);
+          if (!instrument) return null;
+          return {
+            ticker: instrument.ticker,
+            name: instrument.name,
+            color: SERIES_COLORS[index % SERIES_COLORS.length],
+            points: simulateSeries(instrument.ticker, instrument.risk, horizon),
+          };
+        })
+        .filter((serie): serie is MarketChartSeries => serie !== null),
+    [chartTickers, horizon, instruments],
+  );
+
+  /** Trayectoria corta de cada tarjeta. Se calcula una vez para todo el catálogo. */
+  const sparklines = useMemo(() => {
+    const map = new Map<string, SeriesPoint[]>();
+    for (const item of instruments) {
+      map.set(item.ticker, simulateSeries(item.ticker, item.risk, 3));
+    }
+    return map;
+  }, [instruments]);
+
+  /** Serie del instrumento abierto en la ficha. */
+  const detailSeries = useMemo<MarketChartSeries[]>(
+    () =>
+      selected
+        ? [
+            {
+              ticker: selected.ticker,
+              name: selected.name,
+              color: SERIES_COLORS[0],
+              points: simulateSeries(selected.ticker, selected.risk, DETAIL_YEARS),
+            },
+          ]
+        : [],
+    [selected],
+  );
 
   const closeModal = useCallback(() => {
     abortRef.current?.abort();
@@ -278,6 +396,101 @@ export function MarketsExplorer({
         })}
       </div>
 
+      {/* ------------------------------------------------------------------ */}
+      {/* Gráfico comparativo de evolución (simulación, no precios reales)    */}
+      {/* ------------------------------------------------------------------ */}
+      <section className="mt-4 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="text-sm font-bold text-slate-900">
+              <span aria-hidden="true">📉</span> Evolución simulada · base 100
+            </h3>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Cómo se movería una inversión de 100 según la volatilidad de cada perfil de
+              riesgo. Son trayectorias <strong>simuladas</strong>, no el precio histórico
+              del fondo.
+            </p>
+          </div>
+          <div
+            role="group"
+            aria-label="Horizonte del gráfico"
+            className="flex flex-none gap-1 rounded-lg bg-slate-100 p-1"
+          >
+            {HORIZONS.map((option) => (
+              <button
+                key={option}
+                type="button"
+                onClick={() => setHorizon(option)}
+                aria-pressed={horizon === option}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                  horizon === option
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-500 hover:text-slate-800"
+                }`}
+              >
+                {option} años
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Selector de series: los instrumentos de la categoría a la vista. */}
+        <div
+          role="group"
+          aria-label="Instrumentos del gráfico"
+          className="mt-3 flex gap-1.5 overflow-x-auto pb-1"
+        >
+          {visible.map((instrument) => {
+            const index = chartTickers.indexOf(instrument.ticker);
+            const isOn = index !== -1;
+            return (
+              <button
+                key={instrument.ticker}
+                type="button"
+                onClick={() => toggleTicker(instrument.ticker)}
+                aria-pressed={isOn}
+                title={instrument.name}
+                className={`flex flex-none items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-xs font-medium transition ${
+                  isOn
+                    ? "border-slate-300 bg-slate-50 text-slate-900"
+                    : "border-slate-200 bg-white text-slate-400 hover:text-slate-700"
+                }`}
+              >
+                <span
+                  className="inline-block h-2 w-2 rounded-full"
+                  style={{
+                    backgroundColor: isOn
+                      ? SERIES_COLORS[index % SERIES_COLORS.length]
+                      : "#cbd5e1",
+                  }}
+                  aria-hidden="true"
+                />
+                {instrument.ticker}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="mt-2">
+          {chartSeries.length > 0 ? (
+            <MarketChart series={chartSeries} years={horizon} />
+          ) : (
+            <p className="py-8 text-center text-sm text-slate-400">
+              Elige al menos un instrumento para dibujar el gráfico.
+            </p>
+          )}
+        </div>
+
+        <p className="mt-2 border-t border-slate-100 pt-2 text-[11px] leading-relaxed text-slate-400">
+          Modelo educativo: todas las series comparten la misma tendencia (
+          {Math.round(TREND_PER_YEAR * 100)}% real anual) y solo se diferencian por su
+          volatilidad, de {assumptionsLabel("bajo")} en el riesgo bajo a{" "}
+          {assumptionsLabel("muy alto")} en el muy alto. Así el gráfico compara cuánto se
+          agita cada instrumento, no cuánto rinde: no representa el desempeño pasado ni
+          futuro de ningún fondo. Puedes superponer hasta {MAX_SERIES} instrumentos.
+        </p>
+      </section>
+
       {/* Grid de instrumentos */}
       <ul className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         {visible.map((instrument) => {
@@ -311,6 +524,19 @@ export function MarketsExplorer({
                 <p className="mt-3 text-xs leading-relaxed text-slate-600">
                   {instrument.description}
                 </p>
+
+                {/* Mini-gráfico: la forma del riesgo, sin cifras (esas van en la ficha). */}
+                <div className="mt-3">
+                  <Sparkline
+                    points={sparklines.get(instrument.ticker) ?? []}
+                    color={RISK_COLORS[instrument.risk]}
+                    idKey={instrument.ticker}
+                    label={`Trayectoria simulada de ${instrument.ticker} a 3 años`}
+                  />
+                  <p className="mt-1 text-[10px] text-slate-400">
+                    Movimiento simulado · 3 años
+                  </p>
+                </div>
 
                 <div className="mt-3 flex flex-wrap items-center gap-2">
                   <span
@@ -421,6 +647,31 @@ export function MarketsExplorer({
 
             {/* Cuerpo */}
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+              {/*
+                Gráfico de la ficha. Va antes del muro de pago a propósito: la
+                simulación se calcula en el navegador y no cuesta tokens, así
+                que también la ve el plan gratuito.
+              */}
+              <section className="mb-4 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
+                <div className="flex flex-wrap items-baseline justify-between gap-x-3">
+                  <h3 className="text-xs font-semibold text-slate-700">
+                    Evolución simulada · {DETAIL_YEARS} años
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    Base 100 · no son precios reales
+                  </p>
+                </div>
+                <div className="mt-2">
+                  <MarketChart series={detailSeries} years={DETAIL_YEARS} />
+                </div>
+                <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
+                  Trayectoria simulada para un instrumento de{" "}
+                  {RISK_META[selected.risk].label.toLowerCase()} (
+                  {assumptionsLabel(selected.risk)}). Ilustra cuánto se mueve un perfil así,
+                  no el desempeño de {selected.ticker}.
+                </p>
+              </section>
+
               {showPaywall ? (
                 /* ---------- Muro de pago ---------- */
                 <div className="text-center">
