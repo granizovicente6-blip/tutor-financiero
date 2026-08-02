@@ -185,6 +185,46 @@ export function LessonAudioPlayer({
 
         {!unsupported && <div className="mt-4">{transport}</div>}
 
+        {/* Selector de relator. El catálogo lo pone el sistema operativo, así
+            que aquí solo se ofrece lo que este dispositivo tenga instalado.
+            Mientras el navegador no lo haya entregado no se afirma nada. */}
+        {!unsupported && state.voicesReady && (
+          <div className="mt-3 flex items-center gap-2">
+            <label
+              htmlFor="lesson-voice"
+              className="flex-none text-[11px] font-medium text-slate-500"
+            >
+              <span aria-hidden="true">🎙️</span> Relator
+            </label>
+            {state.voices.length > 0 ? (
+              <select
+                id="lesson-voice"
+                value={state.voiceId ?? ""}
+                onChange={(event) => lessonSpeech.setVoice(event.target.value)}
+                className="min-w-0 flex-1 truncate rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700 shadow-sm transition focus:border-indigo-400 focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              >
+                {state.voices.map((voice) => (
+                  <option key={voice.id} value={voice.id}>
+                    {voice.label}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <span className="min-w-0 flex-1 text-[11px] text-slate-500">
+                Tu dispositivo no tiene voces en español instaladas; se usará la
+                predeterminada del navegador.
+              </span>
+            )}
+          </div>
+        )}
+
+        {!unsupported && state.voicesReady && state.voices.length === 1 && (
+          <p className="mt-1 text-[11px] text-slate-400">
+            Este dispositivo ofrece un solo relator en español. Instalar más voces
+            del sistema añade opciones aquí.
+          </p>
+        )}
+
         {!isPremium && !unsupported && (
           <p className="mt-3 text-[11px] text-slate-500">
             {previewLeft !== null && previewLeft > 0 && status !== "idle"
