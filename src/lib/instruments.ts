@@ -19,6 +19,9 @@ export const INSTRUMENT_CATEGORIES = [
   "Inteligencia Artificial",
   "Semiconductores",
   "Energía Limpia",
+  "Consumo",
+  "Salud",
+  "Servicios Financieros",
   "Dividendos",
   "Renta Fija",
   "Mercados Emergentes",
@@ -329,6 +332,181 @@ export const INSTRUMENTS: Instrument[] = [
       "Sigue el precio del oro físico. No genera intereses ni dividendos: su comportamiento depende solo del precio del metal.",
     issuer: "State Street / SPDR",
   },
+
+  // ===========================================================================
+  // Acciones individuales
+  //
+  // Una acción es UNA empresa, no una canasta: por eso todas aparecen aquí con
+  // un riesgo igual o mayor que el del ETF de su misma categoría. Están para
+  // que el estudiante pueda contrastar ambas cosas sobre el mismo sector, que
+  // es la lección central de esta sección.
+  // ===========================================================================
+
+  // --- Tecnología.
+  {
+    ticker: "AAPL",
+    name: "Apple Inc.",
+    kind: "Acción",
+    category: "Tecnología",
+    risk: "alto",
+    emblem: "🍎",
+    description:
+      "Diseña y vende hardware de consumo (iPhone, Mac) y una creciente línea de servicios digitales asociados a su ecosistema.",
+    issuer: "Sector tecnología",
+  },
+  {
+    ticker: "MSFT",
+    name: "Microsoft Corporation",
+    kind: "Acción",
+    category: "Tecnología",
+    risk: "alto",
+    emblem: "🪟",
+    description:
+      "Software empresarial, sistema operativo Windows y la nube Azure. Su negocio combina licencias y suscripciones recurrentes.",
+    issuer: "Sector tecnología",
+  },
+  {
+    ticker: "GOOGL",
+    name: "Alphabet Inc. (Clase A)",
+    kind: "Acción",
+    category: "Tecnología",
+    risk: "alto",
+    emblem: "🔎",
+    description:
+      "Matriz de Google y YouTube. Su ingreso depende sobre todo de la publicidad digital, lo que la hace sensible al ciclo económico.",
+    issuer: "Sector tecnología",
+  },
+  {
+    ticker: "AMZN",
+    name: "Amazon.com, Inc.",
+    kind: "Acción",
+    category: "Tecnología",
+    risk: "alto",
+    emblem: "📦",
+    description:
+      "Comercio electrónico a gran escala más AWS, su división de servicios en la nube. Buen ejemplo de una empresa con dos negocios muy distintos.",
+    issuer: "Sector tecnología / consumo",
+  },
+  {
+    ticker: "META",
+    name: "Meta Platforms, Inc.",
+    kind: "Acción",
+    category: "Tecnología",
+    risk: "muy alto",
+    emblem: "💬",
+    description:
+      "Dueña de Facebook, Instagram y WhatsApp. Vive de la publicidad y a la vez invierte fuerte en apuestas de largo plazo.",
+    issuer: "Sector tecnología",
+  },
+
+  // --- Semiconductores (además de NVDA, más arriba).
+  {
+    ticker: "AVGO",
+    name: "Broadcom Inc.",
+    kind: "Acción",
+    category: "Semiconductores",
+    risk: "muy alto",
+    emblem: "📡",
+    description:
+      "Chips de conectividad y redes, más una división de software empresarial construida a base de adquisiciones.",
+    issuer: "Sector semiconductores",
+  },
+  {
+    ticker: "AMD",
+    name: "Advanced Micro Devices, Inc.",
+    kind: "Acción",
+    category: "Semiconductores",
+    risk: "muy alto",
+    emblem: "⚡",
+    description:
+      "Diseña procesadores y tarjetas gráficas que compiten directamente con Intel y NVIDIA. Sector muy cíclico.",
+    issuer: "Sector semiconductores",
+  },
+  {
+    ticker: "TSM",
+    name: "Taiwan Semiconductor Manufacturing",
+    kind: "Acción",
+    category: "Semiconductores",
+    risk: "muy alto",
+    emblem: "🏭",
+    description:
+      "Fabrica por encargo los chips que otras empresas diseñan. Añade al análisis el factor geopolítico de su ubicación.",
+    issuer: "Sector semiconductores",
+  },
+
+  // --- Energía limpia.
+  {
+    ticker: "TSLA",
+    name: "Tesla, Inc.",
+    kind: "Acción",
+    category: "Energía Limpia",
+    risk: "muy alto",
+    emblem: "🔋",
+    description:
+      "Vehículos eléctricos, baterías y almacenamiento de energía. Históricamente una de las acciones grandes más volátiles del mercado.",
+    issuer: "Sector automotriz / energía",
+  },
+
+  // --- Consumo.
+  {
+    ticker: "KO",
+    name: "The Coca-Cola Company",
+    kind: "Acción",
+    category: "Consumo",
+    risk: "moderado",
+    emblem: "🥤",
+    description:
+      "Bebidas de consumo masivo con demanda estable. Es el ejemplo clásico de empresa defensiva que reparte dividendos.",
+    issuer: "Consumo básico",
+  },
+  {
+    ticker: "NFLX",
+    name: "Netflix, Inc.",
+    kind: "Acción",
+    category: "Consumo",
+    risk: "muy alto",
+    emblem: "🎬",
+    description:
+      "Suscripciones de streaming a nivel global. Su valoración depende mucho del crecimiento esperado de suscriptores.",
+    issuer: "Consumo discrecional",
+  },
+
+  // --- Salud.
+  {
+    ticker: "JNJ",
+    name: "Johnson & Johnson",
+    kind: "Acción",
+    category: "Salud",
+    risk: "moderado",
+    emblem: "💊",
+    description:
+      "Farmacéutica y productos médicos. Otro ejemplo de sector defensivo: la demanda de salud no sigue el ciclo económico.",
+    issuer: "Sector salud",
+  },
+
+  // --- Servicios financieros.
+  {
+    ticker: "JPM",
+    name: "JPMorgan Chase & Co.",
+    kind: "Acción",
+    category: "Servicios Financieros",
+    risk: "alto",
+    emblem: "🏦",
+    description:
+      "El mayor banco de Estados Unidos. Su resultado depende de las tasas de interés y de la salud del crédito.",
+    issuer: "Banca",
+  },
+  {
+    ticker: "V",
+    name: "Visa Inc.",
+    kind: "Acción",
+    category: "Servicios Financieros",
+    risk: "alto",
+    emblem: "💳",
+    description:
+      "Opera la red que procesa pagos con tarjeta. No presta dinero: cobra una comisión por cada transacción que pasa por su red.",
+    issuer: "Medios de pago",
+  },
 ];
 
 // ---------------------------------------------------------------------------
@@ -372,6 +550,9 @@ export const INSTRUMENT_CATEGORY_META: Record<
   "Inteligencia Artificial": { emoji: "🤖", chip: "bg-violet-100 text-violet-800" },
   Semiconductores: { emoji: "🔌", chip: "bg-cyan-100 text-cyan-800" },
   "Energía Limpia": { emoji: "🌱", chip: "bg-lime-100 text-lime-800" },
+  Consumo: { emoji: "🛒", chip: "bg-rose-100 text-rose-800" },
+  Salud: { emoji: "🩺", chip: "bg-teal-100 text-teal-800" },
+  "Servicios Financieros": { emoji: "💳", chip: "bg-fuchsia-100 text-fuchsia-800" },
   Dividendos: { emoji: "💵", chip: "bg-emerald-100 text-emerald-800" },
   "Renta Fija": { emoji: "📄", chip: "bg-blue-100 text-blue-800" },
   "Mercados Emergentes": { emoji: "🌏", chip: "bg-orange-100 text-orange-800" },
@@ -406,4 +587,48 @@ export function getInstrumentsByCategory(
 ): Instrument[] {
   if (category === null) return INSTRUMENTS;
   return INSTRUMENTS.filter((item) => item.category === category);
+}
+
+/** ETFs o acciones. Es la partición que separan las pestañas de la sección. */
+export function getInstrumentsByKind(kind: InstrumentKind): Instrument[] {
+  return INSTRUMENTS.filter((item) => item.kind === kind);
+}
+
+/** Vocales acentuadas y eñe del español, y su equivalente sin marca. */
+const ACCENTED = "áàäâéèëêíìïîóòöôúùüûñ";
+const UNACCENTED = "aaaaeeeeiiiioooouuuun";
+
+/**
+ * Minúsculas y sin acentos, para que "tecnologia" encuentre "Tecnología" y
+ * "indice" encuentre "Índice General".
+ *
+ * La sustitución es una tabla explícita en vez de una normalización Unicode:
+ * el catálogo está entero en español, la tabla cubre todos sus casos y se lee
+ * de un vistazo.
+ */
+function normalizeText(text: string): string {
+  let result = "";
+  for (const char of text.toLowerCase()) {
+    const index = ACCENTED.indexOf(char);
+    result += index === -1 ? char : UNACCENTED[index];
+  }
+  return result;
+}
+
+/**
+ * Búsqueda del catálogo por símbolo, nombre, categoría o emisor.
+ *
+ * Busca SOLO dentro del catálogo a propósito: es la misma lista que valida
+ * `/api/instruments/analyze`, así que todo lo que el buscador encuentra se
+ * puede analizar, y nada de lo que devuelve deja al endpoint de IA sin su
+ * validación contra contenido conocido.
+ */
+export function searchInstruments(pool: Instrument[], query: string): Instrument[] {
+  const needle = normalizeText(query.trim());
+  if (needle === "") return pool;
+  return pool.filter((item) =>
+    normalizeText(
+      `${item.ticker} ${item.name} ${item.category} ${item.issuer} ${item.kind}`,
+    ).includes(needle),
+  );
 }

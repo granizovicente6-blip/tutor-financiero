@@ -59,9 +59,24 @@ interface MarketChartProps {
   series: MarketChartSeries[];
   /** Horizonte en años, para las etiquetas del eje X. */
   years: number;
+  /**
+   * Etiqueta del eje X y del lector, a partir de los años transcurridos.
+   *
+   * Por defecto se rotula en años ("3a"), que es lo que pide la simulación
+   * educativa. El gráfico de rendimiento real lo sobrescribe para mostrar
+   * fechas, porque ahí el eje son días de mercado y no un horizonte supuesto.
+   */
+  formatTime?: (year: number) => string;
+  /** Descripción para lectores de pantalla; por defecto, la de la simulación. */
+  ariaLabel?: string;
 }
 
-export function MarketChart({ series, years }: MarketChartProps): ReactNode {
+export function MarketChart({
+  series,
+  years,
+  formatTime,
+  ariaLabel,
+}: MarketChartProps): ReactNode {
   /** Índice inspeccionado; null = se muestra el final de la serie. */
   const [hovered, setHovered] = useState<number | null>(null);
 
@@ -105,10 +120,15 @@ export function MarketChart({ series, years }: MarketChartProps): ReactNode {
     setHovered(clamp(activeIndex + delta, 0, length - 1));
   }
 
-  // Marcas del eje X: una por año (hasta seis), más el extremo.
-  const yearStep = Math.max(1, Math.ceil(years / 6));
+  // Marcas del eje X: una por año (hasta seis), más el extremo. Por debajo del
+  // año la marca anual no serviría (solo saldría "Hoy"), así que en tramos
+  // cortos —los rangos del gráfico de rendimiento real— se reparten cinco.
+  const yearStep = years >= 3 ? Math.max(1, Math.ceil(years / 6)) : years / 4;
   const xTicks: number[] = [];
-  for (let year = 0; year <= years; year += yearStep) xTicks.push(year);
+  if (yearStep > 0) {
+    // El medio paso extra absorbe el error de coma flotante del acumulador.
+    for (let year = 0; year <= years - yearStep / 2; year += yearStep) xTicks.push(year);
+  }
   if (xTicks[xTicks.length - 1] !== years) xTicks.push(years);
 
   return (
@@ -116,9 +136,11 @@ export function MarketChart({ series, years }: MarketChartProps): ReactNode {
       {/* Lector: valor de cada serie en el punto inspeccionado. */}
       <div className="mb-2 flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <p className="text-[11px] font-medium uppercase tracking-wide text-slate-400">
-          {activeIndex === 0
-            ? "Hoy"
-            : `Mes ${Math.round(activeYear * 12)}${hovered === null ? " (final)" : ""}`}
+          {formatTime
+            ? `${formatTime(activeYear)}${hovered === null ? " (final)" : ""}`
+            : activeIndex === 0
+              ? "Hoy"
+              : `Mes ${Math.round(activeYear * 12)}${hovered === null ? " (final)" : ""}`}
         </p>
         <ul className="flex flex-wrap gap-x-4 gap-y-1">
           {series.map((line) => {
@@ -153,9 +175,12 @@ export function MarketChart({ series, years }: MarketChartProps): ReactNode {
         className="h-auto w-full touch-pan-y cursor-crosshair outline-none focus-visible:ring-2 focus-visible:ring-sky-300"
         role="img"
         tabIndex={0}
-        aria-label={`Evolución simulada a ${years} años de ${series
-          .map((line) => line.ticker)
-          .join(", ")}, en base 100. Usa las flechas izquierda y derecha para recorrerla.`}
+        aria-label={
+          ariaLabel ??
+          `Evolución simulada a ${years} años de ${series
+            .map((line) => line.ticker)
+            .join(", ")}, en base 100. Usa las flechas izquierda y derecha para recorrerla.`
+        }
         preserveAspectRatio="xMidYMid meet"
         onMouseMove={onMouseMove}
         onMouseLeave={() => setHovered(null)}
@@ -251,7 +276,7 @@ export function MarketChart({ series, years }: MarketChartProps): ReactNode {
             className="fill-slate-400"
             fontSize={10}
           >
-            {tick === 0 ? "Hoy" : `${tick}a`}
+            {formatTime ? formatTime(tick) : tick === 0 ? "Hoy" : `${tick}a`}
           </text>
         ))}
       </svg>

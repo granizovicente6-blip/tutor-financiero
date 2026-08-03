@@ -7,8 +7,10 @@ import remarkGfm from "remark-gfm";
 import {
   INSTRUMENT_CATEGORY_META,
   RISK_META,
+  searchInstruments,
   type Instrument,
   type InstrumentCategory,
+  type InstrumentKind,
   type RiskLevel,
 } from "@/lib/instruments";
 import {
@@ -19,7 +21,16 @@ import {
   simulateSeries,
   type SeriesPoint,
 } from "@/lib/market-series";
+import type { MarketSnapshot } from "@/lib/market";
+import {
+  DEFAULT_RANGE,
+  HISTORY_RANGES,
+  daysForRange,
+  describeIssue,
+  type HistoryRangeKey,
+} from "@/lib/market-format";
 import { MarketChart, type MarketChartSeries } from "@/components/charts/MarketChart";
+import { MarketMetrics } from "@/components/MarketMetrics";
 import { Sparkline } from "@/components/charts/Sparkline";
 
 // Render del análisis: encabezados compactos y viñetas legibles en el modal.
@@ -41,19 +52,36 @@ const analysisMarkdown: Components = {
 };
 
 // ---------------------------------------------------------------------------
+// Pestañas: ETFs frente a acciones
+//
+// La sección separa las dos familias porque no se leen igual. Un ETF es una
+// canasta y su ficha se entiende por su composición; una acción es UNA empresa
+// y ahí sí tienen sentido la capitalización, el P/E y el dividendo. Mezclarlas
+// en una sola grilla obligaba a explicar todo el rato de qué tipo era cada una.
+// ---------------------------------------------------------------------------
+
+const KIND_TABS: { key: InstrumentKind; label: string; emoji: string }[] = [
+  { key: "ETF", label: "ETFs", emoji: "🧺" },
+  { key: "Acción", label: "Acciones", emoji: "🏢" },
+];
+
+// ---------------------------------------------------------------------------
 // Gráfico comparativo: qué se dibuja por defecto
 // ---------------------------------------------------------------------------
 
 /** Cuántas trayectorias se pueden superponer sin que el gráfico se vuelva ilegible. */
 const MAX_SERIES = 4;
 
-/** Horizontes ofrecidos en el selector, en años. */
+/** Horizontes ofrecidos en el selector del gráfico simulado, en años. */
 const HORIZONS = [3, 5, 10] as const;
 
-/** Años del gráfico de la ficha individual (fijo: la comparación no aplica). */
+/** Años del gráfico simulado de la ficha (fijo: la comparación no aplica). */
 const DETAIL_YEARS = 10;
 
 const RISK_ORDER: RiskLevel[] = ["bajo", "moderado", "alto", "muy alto"];
+
+/** Milisegundos de un año medio; convierte fechas reales al eje del gráfico. */
+const YEAR_MS = 365.25 * 24 * 60 * 60 * 1000;
 
 /**
  * Selección inicial del gráfico: un instrumento por nivel de riesgo (hasta
@@ -70,6 +98,9 @@ function defaultSelection(pool: Instrument[]): string[] {
   );
   return (byRisk.length > 0 ? byRisk : pool.map((item) => item.ticker)).slice(0, 3);
 }
+
+/** Respuesta de `/api/market/quote`: la instantánea más el rango que cubre. */
+type MarketSnapshotResponse = MarketSnapshot & { range: HistoryRangeKey };
 
 interface MarketsExplorerProps {
   instruments: Instrument[];
@@ -92,8 +123,12 @@ export function MarketsExplorer({
   currencyLabel,
   userEmail,
 }: MarketsExplorerProps) {
-  /** Filtro activo; `null` = "Todos". */
+  /** Pestaña activa: ETFs o acciones individuales. */
+  const [activeKind, setActiveKind] = useState<InstrumentKind>("ETF");
+  /** Filtro de categoría dentro de la pestaña; `null` = "Todas". */
   const [activeCategory, setActiveCategory] = useState<InstrumentCategory | null>(null);
+  /** Texto del buscador (símbolo, nombre, categoría o emisor). */
+  const [query, setQuery] = useState("");
   /** Instrumento abierto en el modal (null = modal cerrado). */
   const [selected, setSelected] = useState<Instrument | null>(null);
 
@@ -112,36 +147,70 @@ export function MarketsExplorer({
    * vuelve a llamar a la IA (ahorra tokens y es instantáneo).
    */
   const cacheRef = useRef<Map<string, string>>(new Map());
-  /** Petición en curso, para cortarla si el usuario cierra el modal. */
+  /** Petición de análisis en curso, para cortarla si se cierra el modal. */
   const abortRef = useRef<AbortController | null>(null);
-
-  const visible =
-    activeCategory === null
-      ? instruments
-      : instruments.filter((item) => item.category === activeCategory);
 
   const showPaywall = !isPremium || premiumRequired;
 
   // -------------------------------------------------------------------------
-  // Gráficos de evolución (simulación educativa; ver `lib/market-series`)
+  // Filtrado: pestaña -> categoría -> buscador
+  // -------------------------------------------------------------------------
+
+  /** Instrumentos de la pestaña y la categoría activas, sin aplicar el buscador. */
+  const scopedPool = useMemo(() => {
+    const byKind = instruments.filter((item) => item.kind === activeKind);
+    return activeCategory === null
+      ? byKind
+      : byKind.filter((item) => item.category === activeCategory);
+  }, [instruments, activeKind, activeCategory]);
+
+  /** Lo que finalmente se ve en la grilla. */
+  const visible = useMemo(
+    () => searchInstruments(scopedPool, query),
+    [scopedPool, query],
+  );
+
+  /** Categorías con instrumentos en la pestaña activa, en el orden canónico. */
+  const kindCategories = useMemo(() => {
+    const inKind = instruments.filter((item) => item.kind === activeKind);
+    return categories.filter((category) =>
+      inKind.some((item) => item.category === category),
+    );
+  }, [categories, instruments, activeKind]);
+
+  /** Cuántos instrumentos tiene la pestaña activa (para el contador de "Todas"). */
+  const kindTotals = useMemo(() => {
+    const totals = new Map<InstrumentKind, number>();
+    for (const item of instruments) {
+      totals.set(item.kind, (totals.get(item.kind) ?? 0) + 1);
+    }
+    return totals;
+  }, [instruments]);
+
+  /** Al cambiar de pestaña la categoría deja de aplicar: puede no existir ahí. */
+  function selectKind(kind: InstrumentKind) {
+    setActiveKind(kind);
+    setActiveCategory(null);
+  }
+
+  // -------------------------------------------------------------------------
+  // Gráfico comparativo (simulación educativa; ver `lib/market-series`)
   // -------------------------------------------------------------------------
 
   /** Horizonte del gráfico comparativo, en años. */
   const [horizon, setHorizon] = useState<number>(5);
   /** Instrumentos superpuestos en el gráfico comparativo (máx. `MAX_SERIES`). */
   const [chartTickers, setChartTickers] = useState<string[]>(() =>
-    defaultSelection(instruments),
+    defaultSelection(instruments.filter((item) => item.kind === "ETF")),
   );
 
-  // Al cambiar de categoría el gráfico se repuebla con lo que hay a la vista:
-  // seguir dibujando un ETF que ya no aparece en la grilla despista más que ayuda.
+  // Al cambiar de pestaña o categoría el gráfico se repuebla con lo que hay a
+  // la vista: seguir dibujando un ETF que ya no aparece despista más que ayuda.
+  // El buscador NO entra aquí a propósito, para que el gráfico no salte con
+  // cada tecla que se escribe.
   useEffect(() => {
-    const pool =
-      activeCategory === null
-        ? instruments
-        : instruments.filter((item) => item.category === activeCategory);
-    setChartTickers(defaultSelection(pool));
-  }, [activeCategory, instruments]);
+    setChartTickers(defaultSelection(scopedPool));
+  }, [scopedPool]);
 
   /** Añade o quita una serie del gráfico comparativo. */
   function toggleTicker(ticker: string) {
@@ -182,8 +251,8 @@ export function MarketsExplorer({
     return map;
   }, [instruments]);
 
-  /** Serie del instrumento abierto en la ficha. */
-  const detailSeries = useMemo<MarketChartSeries[]>(
+  /** Serie simulada del instrumento abierto (respaldo si no hay historial real). */
+  const simulatedDetailSeries = useMemo<MarketChartSeries[]>(
     () =>
       selected
         ? [
@@ -198,14 +267,143 @@ export function MarketsExplorer({
     [selected],
   );
 
+  // -------------------------------------------------------------------------
+  // Datos de mercado reales de la ficha abierta
+  // -------------------------------------------------------------------------
+
+  const [range, setRange] = useState<HistoryRangeKey>(DEFAULT_RANGE);
+  const [snapshot, setSnapshot] = useState<MarketSnapshotResponse | null>(null);
+  const [snapshotLoading, setSnapshotLoading] = useState(false);
+  const [snapshotError, setSnapshotError] = useState<string | null>(null);
+
+  /** Instantáneas ya traídas en esta visita, por ticker y rango. */
+  const snapshotCacheRef = useRef<Map<string, MarketSnapshotResponse>>(new Map());
+  const marketAbortRef = useRef<AbortController | null>(null);
+
+  const loadSnapshot = useCallback(
+    async (ticker: string, rangeKey: HistoryRangeKey) => {
+      const cacheKey = `${ticker}:${rangeKey}`;
+      const cached = snapshotCacheRef.current.get(cacheKey);
+      if (cached) {
+        setSnapshot(cached);
+        setSnapshotError(null);
+        setSnapshotLoading(false);
+        return;
+      }
+
+      marketAbortRef.current?.abort();
+      const controller = new AbortController();
+      marketAbortRef.current = controller;
+
+      setSnapshotLoading(true);
+      setSnapshotError(null);
+
+      try {
+        const response = await fetch(
+          `/api/market/quote?ticker=${encodeURIComponent(ticker)}&range=${rangeKey}`,
+          { signal: controller.signal },
+        );
+        if (!response.ok) {
+          const data = (await response.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          throw new Error(
+            data?.error ?? `No se pudieron obtener los datos de mercado (${response.status}).`,
+          );
+        }
+        const data = (await response.json()) as MarketSnapshotResponse;
+        snapshotCacheRef.current.set(cacheKey, data);
+        setSnapshot(data);
+      } catch (err) {
+        // Cerrar el modal aborta el fetch: eso no es un error que mostrar.
+        if (err instanceof DOMException && err.name === "AbortError") return;
+        console.error("[mercados] Error al obtener datos de mercado:", err);
+        setSnapshotError(
+          err instanceof Error && err.message
+            ? err.message
+            : "No se pudieron obtener los datos de mercado.",
+        );
+      } finally {
+        if (marketAbortRef.current === controller) {
+          marketAbortRef.current = null;
+          setSnapshotLoading(false);
+        }
+      }
+    },
+    [],
+  );
+
+  function selectRange(next: HistoryRangeKey) {
+    setRange(next);
+    if (selected) void loadSnapshot(selected.ticker, next);
+  }
+
+  /**
+   * Gráfico de rendimiento con precios REALES, normalizado a base 100 en el
+   * primer cierre del rango. Se normaliza en vez de dibujar el precio para que
+   * la lectura sea "cuánto ha rendido en el período", que es lo que interesa
+   * comparar, y para reutilizar el mismo eje que la simulación.
+   */
+  const realSeries = useMemo<MarketChartSeries[] | null>(() => {
+    const history = snapshot?.history;
+    if (!selected || !history || history.length < 2) return null;
+
+    const startMs = Date.parse(history[0].date);
+    const base = history[0].close;
+    if (!Number.isFinite(startMs) || !(base > 0)) return null;
+
+    return [
+      {
+        ticker: selected.ticker,
+        name: selected.name,
+        color: SERIES_COLORS[0],
+        points: history.map((point) => ({
+          year: (Date.parse(point.date) - startMs) / YEAR_MS,
+          value: (point.close / base) * 100,
+        })),
+      },
+    ];
+  }, [snapshot, selected]);
+
+  const realYears = realSeries
+    ? realSeries[0].points[realSeries[0].points.length - 1].year
+    : 0;
+
+  /** Etiquetas del eje del gráfico real: fechas, no horizontes supuestos. */
+  const formatRealTime = useCallback(
+    (year: number): string => {
+      const history = snapshot?.history;
+      if (!history || history.length === 0) return "";
+      const startMs = Date.parse(history[0].date);
+      const date = new Date(startMs + year * YEAR_MS);
+      const longRange = daysForRange(snapshot?.range ?? DEFAULT_RANGE) > 400;
+      return date.toLocaleDateString(
+        "es-CL",
+        longRange
+          ? { month: "short", year: "numeric" }
+          : { day: "2-digit", month: "short" },
+      );
+    },
+    [snapshot],
+  );
+
+  // -------------------------------------------------------------------------
+  // Ciclo de vida del modal
+  // -------------------------------------------------------------------------
+
   const closeModal = useCallback(() => {
     abortRef.current?.abort();
     abortRef.current = null;
+    marketAbortRef.current?.abort();
+    marketAbortRef.current = null;
     setSelected(null);
     setAnalysis("");
     setError(null);
     setIsLoading(false);
     setPremiumRequired(false);
+    setSnapshot(null);
+    setSnapshotError(null);
+    setSnapshotLoading(false);
   }, []);
 
   // Cerrar con Escape mientras el modal está abierto.
@@ -218,8 +416,14 @@ export function MarketsExplorer({
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [selected, closeModal]);
 
-  // Al desmontar, cortar cualquier stream vivo.
-  useEffect(() => () => abortRef.current?.abort(), []);
+  // Al desmontar, cortar cualquier petición viva.
+  useEffect(
+    () => () => {
+      abortRef.current?.abort();
+      marketAbortRef.current?.abort();
+    },
+    [],
+  );
 
   /** Pide el análisis a la API y lo va pintando conforme llega. */
   const startAnalysis = useCallback(async (instrument: Instrument) => {
@@ -290,11 +494,17 @@ export function MarketsExplorer({
     }
   }, []);
 
-  /** Abre la ficha: con membresía lanza el análisis; sin ella, la invitación. */
+  /** Abre la ficha: datos de mercado siempre; el análisis con IA, si es Premium. */
   function openInstrument(instrument: Instrument) {
     setSelected(instrument);
     setError(null);
     setPremiumRequired(false);
+
+    // Los datos de mercado no dependen de la membresía: son públicos.
+    setSnapshot(null);
+    setSnapshotError(null);
+    setRange(DEFAULT_RANGE);
+    void loadSnapshot(instrument.ticker, DEFAULT_RANGE);
 
     if (!isPremium) {
       setAnalysis("");
@@ -312,22 +522,26 @@ export function MarketsExplorer({
     void startAnalysis(instrument);
   }
 
+  const kindLabel = activeKind === "ETF" ? "ETFs" : "acciones";
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-6">
       {/* Presentación de la sección */}
       <section className="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 to-white p-5 shadow-sm">
         <h2 className="text-lg font-bold text-sky-900">
-          <span aria-hidden="true">📈</span> Mercados / ETFs
+          <span aria-hidden="true">📊</span> Análisis de Mercado
         </h2>
         <p className="mt-1 text-sm text-slate-600">
-          Un catálogo de {instruments.length} instrumentos para estudiar cómo está
-          construido cada uno. {isPremium
-            ? "Abre cualquier ficha para ver el desglose que prepara tu tutor de IA."
+          Un catálogo de {instruments.length} instrumentos —ETFs y acciones— para
+          estudiar cómo está construido cada uno.{" "}
+          {isPremium
+            ? "Abre cualquier ficha para ver sus métricas y el desglose que prepara tu tutor de IA."
             : "Con la Membresía Premium, tu tutor de IA desglosa cada ficha para ti."}
         </p>
         <p className="mt-2 text-xs text-slate-500">
-          Material educativo: no incluye precios en vivo ni recomendaciones de compra o
-          venta.
+          Material educativo. Los precios y ratios provienen de un proveedor externo y
+          pueden venir con retraso; nada de lo que aparece aquí es una recomendación de
+          compra o venta.
         </p>
       </section>
 
@@ -352,11 +566,81 @@ export function MarketsExplorer({
         </div>
       )}
 
-      {/* Filtros por categoría */}
+      {/* Pestañas: ETFs / Acciones */}
+      <div
+        role="tablist"
+        aria-label="Tipo de instrumento"
+        className="mt-5 grid grid-cols-2 gap-1 rounded-xl bg-slate-200/70 p-1"
+      >
+        {KIND_TABS.map((tab) => {
+          const isActive = tab.key === activeKind;
+          return (
+            <button
+              key={tab.key}
+              type="button"
+              role="tab"
+              aria-selected={isActive}
+              onClick={() => selectKind(tab.key)}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                isActive
+                  ? "bg-white text-slate-900 shadow-sm"
+                  : "text-slate-500 hover:text-slate-800"
+              }`}
+            >
+              <span aria-hidden="true">{tab.emoji}</span> {tab.label}
+              <span className="text-slate-400"> · {kindTotals.get(tab.key) ?? 0}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Buscador */}
+      <div className="mt-3">
+        <label htmlFor="market-search" className="sr-only">
+          Buscar {kindLabel} por símbolo o nombre
+        </label>
+        <div className="relative">
+          <span
+            className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400"
+            aria-hidden="true"
+          >
+            🔎
+          </span>
+          <input
+            id="market-search"
+            type="search"
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder={
+              activeKind === "Acción"
+                ? "Busca una acción: AAPL, Microsoft, semiconductores…"
+                : "Busca un ETF: VOO, Vanguard, dividendos…"
+            }
+            className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-9 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-sky-400 focus:ring-2 focus:ring-sky-100"
+          />
+          {query !== "" && (
+            <button
+              type="button"
+              onClick={() => setQuery("")}
+              aria-label="Limpiar búsqueda"
+              className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg px-2 py-1 text-xs text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+            >
+              ✕
+            </button>
+          )}
+        </div>
+        <p aria-live="polite" className="mt-1 text-xs text-slate-400">
+          {query === ""
+            ? `${visible.length} ${visible.length === 1 ? "instrumento" : "instrumentos"} a la vista`
+            : `${visible.length} ${visible.length === 1 ? "resultado" : "resultados"} para “${query}”`}
+        </p>
+      </div>
+
+      {/* Filtros por categoría (dentro de la pestaña activa) */}
       <div
         role="group"
         aria-label="Filtrar por categoría"
-        className="mt-5 flex gap-2 overflow-x-auto pb-1"
+        className="mt-2 flex gap-2 overflow-x-auto pb-1"
       >
         <button
           type="button"
@@ -368,15 +652,18 @@ export function MarketsExplorer({
               : "border-slate-200 bg-white text-slate-600 hover:border-sky-300 hover:text-sky-800"
           }`}
         >
-          Todos <span className={activeCategory === null ? "opacity-80" : "text-slate-400"}>
-            · {instruments.length}
+          Todas{" "}
+          <span className={activeCategory === null ? "opacity-80" : "text-slate-400"}>
+            · {kindTotals.get(activeKind) ?? 0}
           </span>
         </button>
 
-        {categories.map((category) => {
+        {kindCategories.map((category) => {
           const catMeta = INSTRUMENT_CATEGORY_META[category];
           const isActive = category === activeCategory;
-          const count = instruments.filter((item) => item.category === category).length;
+          const count = instruments.filter(
+            (item) => item.kind === activeKind && item.category === category,
+          ).length;
           return (
             <button
               key={category}
@@ -408,7 +695,7 @@ export function MarketsExplorer({
             <p className="mt-0.5 text-xs text-slate-500">
               Cómo se movería una inversión de 100 según la volatilidad de cada perfil de
               riesgo. Son trayectorias <strong>simuladas</strong>, no el precio histórico
-              del fondo.
+              del instrumento (ese está en cada ficha).
             </p>
           </div>
           <div
@@ -434,13 +721,13 @@ export function MarketsExplorer({
           </div>
         </div>
 
-        {/* Selector de series: los instrumentos de la categoría a la vista. */}
+        {/* Selector de series: los instrumentos de la pestaña a la vista. */}
         <div
           role="group"
           aria-label="Instrumentos del gráfico"
           className="mt-3 flex gap-1.5 overflow-x-auto pb-1"
         >
-          {visible.map((instrument) => {
+          {scopedPool.map((instrument) => {
             const index = chartTickers.indexOf(instrument.ticker);
             const isOn = index !== -1;
             return (
@@ -564,11 +851,7 @@ export function MarketsExplorer({
                       : "bg-amber-500 hover:bg-amber-600"
                   }`}
                 >
-                  {isPremium ? (
-                    <>✨ Analizar con IA</>
-                  ) : (
-                    <>👑 Analizar con IA</>
-                  )}
+                  {isPremium ? <>✨ Analizar con IA</> : <>👑 Analizar con IA</>}
                 </button>
               </article>
             </li>
@@ -578,7 +861,9 @@ export function MarketsExplorer({
 
       {visible.length === 0 && (
         <p className="mt-6 text-center text-sm text-slate-500">
-          No hay instrumentos en esta categoría todavía.
+          {query === ""
+            ? "No hay instrumentos en esta categoría todavía."
+            : `Ningún instrumento del catálogo coincide con “${query}”.`}
         </p>
       )}
 
@@ -588,7 +873,7 @@ export function MarketsExplorer({
       </p>
 
       {/* ------------------------------------------------------------------ */}
-      {/* Modal: análisis con IA (Premium) o invitación a suscribirse (Free)  */}
+      {/* Modal: ficha del instrumento                                        */}
       {/* ------------------------------------------------------------------ */}
       {selected && (
         <div
@@ -618,6 +903,9 @@ export function MarketsExplorer({
                   {selected.ticker} · {selected.name}
                 </h2>
                 <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                    {selected.kind}
+                  </span>
                   <span
                     className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
                       INSTRUMENT_CATEGORY_META[selected.category].chip
@@ -648,27 +936,97 @@ export function MarketsExplorer({
             {/* Cuerpo */}
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
               {/*
-                Gráfico de la ficha. Va antes del muro de pago a propósito: la
-                simulación se calcula en el navegador y no cuesta tokens, así
-                que también la ve el plan gratuito.
+                Métricas y gráfico van ANTES del muro de pago a propósito: son
+                datos públicos o cálculos locales, no cuestan tokens, así que
+                también los ve el plan gratuito. Lo que exige membresía es el
+                desglose que escribe la IA.
               */}
+              <div className="mb-4">
+                <MarketMetrics
+                  instrument={selected}
+                  snapshot={snapshot}
+                  isLoading={snapshotLoading}
+                  error={snapshotError}
+                  onRetry={() => void loadSnapshot(selected.ticker, range)}
+                />
+              </div>
+
+              {/* Gráfico de rendimiento: real si hay historial, simulado si no. */}
               <section className="mb-4 rounded-xl border border-slate-200 bg-slate-50/70 p-3">
-                <div className="flex flex-wrap items-baseline justify-between gap-x-3">
-                  <h3 className="text-xs font-semibold text-slate-700">
-                    Evolución simulada · {DETAIL_YEARS} años
-                  </h3>
-                  <p className="text-[11px] text-slate-400">
-                    Base 100 · no son precios reales
-                  </p>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <h3 className="text-xs font-semibold text-slate-700">
+                      {realSeries
+                        ? "Rendimiento del período · base 100"
+                        : `Evolución simulada · ${DETAIL_YEARS} años`}
+                    </h3>
+                    <p className="text-[11px] text-slate-400">
+                      {realSeries
+                        ? "Precios de cierre reales, reescalados a 100 al inicio del rango"
+                        : "Base 100 · no son precios reales"}
+                    </p>
+                  </div>
+
+                  {/* El selector de rango solo tiene sentido con datos reales. */}
+                  {realSeries && (
+                    <div
+                      role="group"
+                      aria-label="Rango del gráfico"
+                      className="flex flex-none gap-1 rounded-lg bg-slate-200/70 p-1"
+                    >
+                      {HISTORY_RANGES.map((option) => (
+                        <button
+                          key={option.key}
+                          type="button"
+                          onClick={() => selectRange(option.key)}
+                          aria-pressed={range === option.key}
+                          className={`rounded-md px-2 py-1 text-[11px] font-medium transition ${
+                            range === option.key
+                              ? "bg-white text-slate-900 shadow-sm"
+                              : "text-slate-500 hover:text-slate-800"
+                          }`}
+                        >
+                          {option.key}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
+
                 <div className="mt-2">
-                  <MarketChart series={detailSeries} years={DETAIL_YEARS} />
+                  {realSeries ? (
+                    <MarketChart
+                      series={realSeries}
+                      years={Math.max(realYears, 0.01)}
+                      formatTime={formatRealTime}
+                      ariaLabel={`Rendimiento real de ${selected.ticker} en el rango ${range}, reescalado a base 100. Usa las flechas izquierda y derecha para recorrerlo.`}
+                    />
+                  ) : (
+                    <MarketChart series={simulatedDetailSeries} years={DETAIL_YEARS} />
+                  )}
                 </div>
+
                 <p className="mt-1 text-[11px] leading-relaxed text-slate-400">
-                  Trayectoria simulada para un instrumento de{" "}
-                  {RISK_META[selected.risk].label.toLowerCase()} (
-                  {assumptionsLabel(selected.risk)}). Ilustra cuánto se mueve un perfil así,
-                  no el desempeño de {selected.ticker}.
+                  {realSeries ? (
+                    <>
+                      Cierres diarios del proveedor de datos, reescalados a 100 en el
+                      primer día del rango para leer el rendimiento del período.
+                      Rentabilidades pasadas no anticipan resultados futuros.
+                    </>
+                  ) : (
+                    <>
+                      {snapshotLoading
+                        ? "Buscando el historial real de precios… "
+                        : snapshot?.notes.history
+                          ? `${describeIssue(snapshot.notes.history)} `
+                          : ""}
+                      Mientras tanto se muestra una trayectoria <strong>simulada</strong>{" "}
+                      para un instrumento de{" "}
+                      {RISK_META[selected.risk].label.toLowerCase()} (
+                      {assumptionsLabel(selected.risk)}). Ilustra cuánto se mueve un perfil
+                      así, no el desempeño de {selected.ticker}.
+                    </>
+                  )}
                 </p>
               </section>
 
@@ -782,9 +1140,9 @@ export function MarketsExplorer({
                   )}
 
                   <p className="mt-4 border-t border-slate-100 pt-3 text-[11px] leading-relaxed text-slate-400">
-                    Análisis generado por IA con fines educativos. No incluye precios en
-                    vivo ni constituye una recomendación de compra o venta. Verifica
-                    siempre los datos en la ficha oficial del emisor.
+                    Análisis generado por IA con fines educativos. El texto no incorpora
+                    los precios de esta ficha y no constituye una recomendación de compra
+                    o venta. Verifica siempre los datos en la ficha oficial del emisor.
                   </p>
                 </>
               )}

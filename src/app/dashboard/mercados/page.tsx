@@ -13,13 +13,17 @@ import {
 import { loginPath } from "@/lib/auth-redirect";
 
 export const metadata = {
-  title: "Mercados / ETFs",
+  title: "Análisis de Mercado",
   description:
-    "Catálogo educativo de ETFs e instrumentos financieros con desglose generado por IA.",
+    "Catálogo educativo de ETFs y acciones con métricas de mercado y desglose generado por IA.",
 };
 
 /**
- * Página "Mercados / ETFs" del Dashboard (Server Component).
+ * Página "Análisis de Mercado" del Dashboard (Server Component).
+ *
+ * La ruta sigue siendo `/dashboard/mercados` aunque el nombre visible haya
+ * cambiado: la sección ya está desplegada y renombrar la URL rompería los
+ * enlaces que los usuarios tengan guardados.
  *
  * - Exige sesión (defensa en profundidad además del middleware).
  * - El CATÁLOGO es público dentro del área de producto: cualquier usuario con
@@ -49,10 +53,10 @@ export default async function MarketsPage() {
         <div className="mx-auto flex max-w-3xl items-center justify-between gap-2 px-4 py-3">
           <div className="flex items-center gap-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-600 text-base text-white">
-              📈
+              📊
             </span>
             <h1 className="text-base font-semibold text-slate-900 sm:text-lg">
-              Mercados / ETFs
+              Análisis de Mercado
             </h1>
           </div>
           <div className="flex items-center gap-1">

@@ -4,8 +4,8 @@ import Link from "next/link";
  * Navegación principal del área de producto.
  *
  * Vive en un componente aparte porque la comparten varias pantallas (la ruta de
- * aprendizaje, mercados y los simuladores): así, añadir una sección se hace en
- * un solo sitio y todas las cabeceras quedan alineadas.
+ * aprendizaje, el análisis de mercado y los simuladores): así, añadir una
+ * sección se hace en un solo sitio y todas las cabeceras quedan alineadas.
  *
  * No tiene estado ni hooks, así que funciona igual dentro de un Server Component
  * o de uno de cliente.
@@ -22,7 +22,12 @@ export type DashboardSection = "ruta" | "mercados" | "simuladores";
 
 const ITEMS: { key: DashboardSection; href: string; label: string; emoji: string }[] = [
   { key: "ruta", href: "/dashboard", label: "Mi ruta", emoji: "📚" },
-  { key: "mercados", href: "/dashboard/mercados", label: "Mercados / ETFs", emoji: "📈" },
+  {
+    key: "mercados",
+    href: "/dashboard/mercados",
+    label: "Análisis de Mercado",
+    emoji: "📊",
+  },
   { key: "simuladores", href: "/simuladores", label: "Simuladores", emoji: "🧮" },
 ];
 

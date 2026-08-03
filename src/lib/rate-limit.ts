@@ -23,6 +23,7 @@ export const API_ROUTES = {
   quizFeedback: "/api/quiz/feedback",
   createSubscription: "/api/mercadopago/create-subscription",
   instrumentAnalysis: "/api/instruments/analyze",
+  marketQuote: "/api/market/quote",
 } as const;
 
 export interface RateLimitResult {
