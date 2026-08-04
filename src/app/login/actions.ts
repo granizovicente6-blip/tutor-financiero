@@ -1,6 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import type { AuthError } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeEmail } from "@/lib/auth-email";
 import { resolveRedirectTo } from "@/lib/auth-redirect";
@@ -14,9 +15,16 @@ import type { AuthState } from "@/lib/types";
  * El resto cae en un mensaje genérico —no se detalla si el correo existe— para
  * no convertir el login en un buscador de cuentas.
  */
-function loginErrorMessage(code: string | undefined, message: string): string {
-  const hint = `${code ?? ""} ${message}`.toLowerCase();
+function loginErrorMessage(error: AuthError): string {
+  // El `name` entra en la mezcla porque los fallos de red llegan SOLO ahí:
+  // AuthRetryableFetchError no trae ni código ni mensaje aprovechable.
+  const hint = `${error.name ?? ""} ${error.code ?? ""} ${error.message ?? ""}`.toLowerCase();
 
+  // Va primero: un fallo de red no dice nada sobre las credenciales, y culpar a
+  // la contraseña manda al usuario a cambiarla cuando el problema es otro.
+  if (hint.includes("retryable") || hint.includes("failed to fetch") || error.status === 0) {
+    return "Error de conexión con el servicio de autenticación. Por favor reintenta en un momento.";
+  }
   if (hint.includes("email_not_confirmed") || hint.includes("not confirmed")) {
     return "Tu correo aún no está confirmado. Abre el enlace que te enviamos y vuelve a intentarlo.";
   }
@@ -43,11 +51,33 @@ export async function login(_prev: AuthState, formData: FormData): Promise<AuthS
     return { error: "Introduce tu correo y contraseña." };
   }
 
-  const supabase = await createClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  // Envuelve solo la llamada: `redirect()` navega lanzando y debe quedar fuera.
+  let error: AuthError | null;
+  try {
+    const supabase = await createClient();
+    ({ error } = await supabase.auth.signInWithPassword({ email, password }));
+  } catch (thrown) {
+    // Credenciales de Supabase ausentes o mal formadas, o un fallo de red que
+    // escapó al reintento del SDK. `getOwnPropertyNames` hace visibles `message`
+    // y `stack`, que en un Error no son enumerables (sin él sale "{}").
+    console.error(
+      "Login FetchError details:",
+      JSON.stringify(thrown, Object.getOwnPropertyNames(thrown ?? {})),
+    );
+    return {
+      error: "Error de conexión con el servicio de autenticación. Por favor reintenta en un momento.",
+    };
+  }
 
   if (error) {
-    return { error: loginErrorMessage(error.code, error.message) };
+    console.error("SignIn error detail:", {
+      message: error.message,
+      name: error.name,
+      code: error.code,
+      status: error.status,
+      raw: JSON.stringify(error, Object.getOwnPropertyNames(error)),
+    });
+    return { error: loginErrorMessage(error) };
   }
 
   // redirect() lanza internamente para navegar; debe ir fuera de try/catch.

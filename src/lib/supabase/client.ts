@@ -1,4 +1,5 @@
 import { createBrowserClient } from "@supabase/ssr";
+import { supabaseAnonKey, supabaseUrl } from "./env";
 
 /**
  * Cliente de Supabase para el NAVEGADOR (Client Components, `"use client"`).
@@ -12,8 +13,5 @@ import { createBrowserClient } from "@supabase/ssr";
  *   const { data } = await supabase.from("conversations").select();
  */
 export function createClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-  );
+  return createBrowserClient(supabaseUrl(), supabaseAnonKey());
 }

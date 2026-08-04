@@ -46,8 +46,13 @@ function describeAuthError(error: AuthError): string {
 function registerErrorMessage(error: AuthError): string {
   const detail = describeAuthError(error);
   const message = error.message ?? "";
-  const hint = `${error.code ?? ""} ${message}`.toLowerCase();
+  // El `name` entra en la mezcla porque los fallos de red llegan SOLO ahí:
+  // AuthRetryableFetchError no trae ni código ni mensaje aprovechable.
+  const hint = `${error.name ?? ""} ${error.code ?? ""} ${message}`.toLowerCase();
 
+  if (hint.includes("retryable") || hint.includes("failed to fetch") || error.status === 0) {
+    return "Error de conexión con el servicio de autenticación. Por favor reintenta en un momento.";
+  }
   if (
     hint.includes("already registered") ||
     hint.includes("user_already_exists") ||
@@ -94,6 +99,28 @@ function registerErrorMessage(error: AuthError): string {
 }
 
 /**
+ * Alta contra Supabase, aislada del resto de la Server Action.
+ *
+ * Está aparte para que el `try/catch` de `register()` envuelva exactamente esto
+ * —incluida la creación del cliente, que lanza si faltan las credenciales— y
+ * nada más.
+ */
+async function supabaseSignUp(email: string, password: string, target: string) {
+  const supabase = await createClient();
+
+  return supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      // A dónde lleva el enlace del correo. Sin esto, Supabase usa el Site URL
+      // del panel: el correo se confirma pero el `code` cae en una página que
+      // no lo canjea, y el usuario queda confirmado pero fuera.
+      emailRedirectTo: authCallbackUrl(target),
+    },
+  });
+}
+
+/**
  * Server Action: registra un nuevo usuario con email y contraseña.
  *
  * Comportamiento según la configuración de Supabase Auth:
@@ -119,27 +146,39 @@ export async function register(_prev: AuthState, formData: FormData): Promise<Au
     return { error: "La contraseña debe tener al menos 6 caracteres." };
   }
 
-  const supabase = await createClient();
-  const { data, error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      // A dónde lleva el enlace del correo. Sin esto, Supabase usa el Site URL
-      // del panel: el correo se confirma pero el `code` cae en una página que
-      // no lo canjea, y el usuario queda confirmado pero fuera.
-      emailRedirectTo: authCallbackUrl(target),
-    },
-  });
+  // El try/catch envuelve SOLO la llamada: `redirect()` navega lanzando, así que
+  // dejarlo dentro haría que el catch se tragase la navegación.
+  let result: Awaited<ReturnType<typeof supabaseSignUp>>;
+  try {
+    result = await supabaseSignUp(email, password, target);
+  } catch (thrown) {
+    // Aquí caen los fallos que el SDK NO envuelve en `error`: credenciales de
+    // Supabase ausentes o mal formadas (las valida `lib/supabase/env.ts`) y los
+    // errores de red que escapan al reintento. `getOwnPropertyNames` es lo que
+    // hace visible el objeto: en un Error, `message` y `stack` no son
+    // enumerables y un JSON.stringify normal los deja fuera —así se imprimía "{}".
+    console.error(
+      "FetchError details:",
+      JSON.stringify(thrown, Object.getOwnPropertyNames(thrown ?? {})),
+    );
+    return {
+      error: "Error de conexión con el servicio de autenticación. Por favor reintenta en un momento.",
+    };
+  }
+
+  const { data, error } = result;
 
   if (error) {
     // El detalle completo solo al log del servidor (Vercel -> Logs): trae el
     // status HTTP y el código que el mensaje traducido se deja por el camino.
+    // `getOwnPropertyNames` por el mismo motivo que arriba: sin él, un AuthError
+    // se serializa como "{}" y el log no sirve de nada.
     console.error("SignUp error detail:", {
       message: error.message,
       name: error.name,
       code: error.code,
       status: error.status,
-      raw: JSON.stringify(error),
+      raw: JSON.stringify(error, Object.getOwnPropertyNames(error)),
     });
     return { error: registerErrorMessage(error) };
   }
