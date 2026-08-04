@@ -62,11 +62,23 @@ export function RegisterForm({ redirectTo }: RegisterFormProps) {
         />
       </label>
 
+      {/* role="alert" para que el lector de pantalla lo anuncie al volver la
+          Server Action: el mensaje aparece lejos del foco (que sigue en el
+          botón). `break-words` es por el motivo original de Supabase, que
+          cuando no hay traducción viene largo y sin espacios. */}
       {state.error && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{state.error}</p>
+        <p
+          role="alert"
+          className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700 break-words"
+        >
+          {state.error}
+        </p>
       )}
       {state.message && (
-        <p className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
+        <p
+          role="status"
+          className="rounded-lg bg-emerald-50 px-3 py-2 text-xs text-emerald-700 break-words"
+        >
           {state.message}
         </p>
       )}
