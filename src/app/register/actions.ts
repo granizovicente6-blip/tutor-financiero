@@ -1,10 +1,37 @@
 "use server";
 
 import { redirect } from "next/navigation";
+import type { AuthError } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeEmail } from "@/lib/auth-email";
-import { DEFAULT_AFTER_REGISTER, resolveRedirectTo } from "@/lib/auth-redirect";
+import { authCallbackUrl, DEFAULT_AFTER_REGISTER, resolveRedirectTo } from "@/lib/auth-redirect";
 import type { AuthState } from "@/lib/types";
+
+/**
+ * Saca un texto utilizable del error de Supabase.
+ *
+ * `error.message` no siempre trae algo legible: cuando el servidor de Auth
+ * responde con un cuerpo de error vacío, el SDK guarda ahí el literal "{}"
+ * —`JSON.stringify` del cuerpo— y eso es lo que acabó saliendo en pantalla como
+ * "No se pudo crear la cuenta: {}". Por eso los descartes son por CONTENIDO y
+ * no por si el campo existe: `message ?? name` no habría arreglado nada.
+ *
+ * Cuando no hay texto se compone algo con el código y el estado HTTP, que al
+ * menos permiten ubicar el fallo en los logs de Supabase.
+ */
+function describeAuthError(error: AuthError): string {
+  const useless = new Set(["", "{}", "[]", "null", "undefined", "[object object]"]);
+
+  for (const candidate of [error.message, error.name]) {
+    const text = candidate?.trim();
+    if (text && !useless.has(text.toLowerCase())) return text;
+  }
+
+  const parts: string[] = [];
+  if (error.code) parts.push(`código ${error.code}`);
+  if (error.status) parts.push(`HTTP ${error.status}`);
+  return parts.length > 0 ? parts.join(", ") : "el servidor no devolvió detalles";
+}
 
 /**
  * Traduce el error de `signUp` al mensaje que ve el usuario.
@@ -16,8 +43,10 @@ import type { AuthState } from "@/lib/types";
  * el fallo sin nada que contar. No hay riesgo de enumerar cuentas: el caso de
  * "correo ya registrado" es explícito de todos modos.
  */
-function registerErrorMessage(code: string | undefined, message: string): string {
-  const hint = `${code ?? ""} ${message}`.toLowerCase();
+function registerErrorMessage(error: AuthError): string {
+  const detail = describeAuthError(error);
+  const message = error.message ?? "";
+  const hint = `${error.code ?? ""} ${message}`.toLowerCase();
 
   if (
     hint.includes("already registered") ||
@@ -50,8 +79,18 @@ function registerErrorMessage(code: string | undefined, message: string): string
   if (hint.includes("email_address_not_authorized")) {
     return "Este correo no está autorizado para registrarse. Prueba con otra dirección.";
   }
+  if (
+    hint.includes("unexpected_failure") ||
+    hint.includes("database error") ||
+    hint.includes("error sending")
+  ) {
+    // Fallo del lado de Supabase, no del usuario: el trigger que crea el perfil
+    // o el envío del correo. Reintentar con otros datos no cambia nada, así que
+    // no se le sugiere.
+    return "No pudimos crear la cuenta por un problema de nuestro servidor. Ya quedó registrado; inténtalo en unos minutos.";
+  }
 
-  return `No se pudo crear la cuenta: ${message}`;
+  return `No se pudo crear la cuenta: ${detail}`;
 }
 
 /**
@@ -81,10 +120,38 @@ export async function register(_prev: AuthState, formData: FormData): Promise<Au
   }
 
   const supabase = await createClient();
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      // A dónde lleva el enlace del correo. Sin esto, Supabase usa el Site URL
+      // del panel: el correo se confirma pero el `code` cae en una página que
+      // no lo canjea, y el usuario queda confirmado pero fuera.
+      emailRedirectTo: authCallbackUrl(target),
+    },
+  });
 
   if (error) {
-    return { error: registerErrorMessage(error.code, error.message) };
+    // El detalle completo solo al log del servidor (Vercel -> Logs): trae el
+    // status HTTP y el código que el mensaje traducido se deja por el camino.
+    console.error("SignUp error detail:", {
+      message: error.message,
+      name: error.name,
+      code: error.code,
+      status: error.status,
+      raw: JSON.stringify(error),
+    });
+    return { error: registerErrorMessage(error) };
+  }
+
+  // Confirmación activada + correo YA registrado => Supabase responde éxito con
+  // un usuario ficticio y sin identidades, para no revelar qué cuentas existen.
+  // Sin este caso, quien se re-registra ve "revisa tu correo" y espera un correo
+  // que no llega nunca.
+  if (data.user && data.user.identities?.length === 0) {
+    return {
+      error: "Este correo ya está registrado o en proceso. Si ya confirmaste, inicia sesión.",
+    };
   }
 
   // Sesión presente => confirmación desactivada => entrar directo.

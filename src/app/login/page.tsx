@@ -2,12 +2,20 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { LoginForm } from "@/components/LoginForm";
-import { isProtectedPath, REDIRECT_PARAM, resolveRedirectTo } from "@/lib/auth-redirect";
+import {
+  isProtectedPath,
+  LOGIN_NOTICE_PARAM,
+  loginNotice,
+  REDIRECT_PARAM,
+  resolveRedirectTo,
+} from "@/lib/auth-redirect";
 
 interface LoginPageProps {
   searchParams: {
     /** `?redirectTo=<ruta>`: a dónde iba el usuario antes de toparse con el login. */
     redirectTo?: string;
+    /** `?aviso=<clave>`: por qué lo mandó aquí el enlace de un correo. */
+    aviso?: string;
   };
 }
 
@@ -30,11 +38,12 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     redirect(target);
   }
 
-  // Solo se avisa cuando el rebote vino de una ruta protegida; si el usuario
-  // entró al login por su cuenta, no hay nada que explicarle.
-  const notice = isProtectedPath(target)
-    ? "Crea tu cuenta gratis o inicia sesión para continuar."
-    : null;
+  // El aviso del enlace de correo manda sobre el del rebote: explica algo que
+  // acaba de pasar (la confirmación) y no solo por qué se pide la sesión. Si no
+  // hay ninguno de los dos, no se le cuenta nada a quien entró por su cuenta.
+  const notice =
+    loginNotice(searchParams[LOGIN_NOTICE_PARAM]) ??
+    (isProtectedPath(target) ? "Crea tu cuenta gratis o inicia sesión para continuar." : null);
 
   return (
     <main className="flex min-h-dvh items-center justify-center bg-slate-100 px-4">
