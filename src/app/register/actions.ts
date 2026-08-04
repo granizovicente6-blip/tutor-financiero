@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
+import { normalizeEmail } from "@/lib/auth-email";
 import { DEFAULT_AFTER_REGISTER, resolveRedirectTo } from "@/lib/auth-redirect";
 import type { AuthState } from "@/lib/types";
 
@@ -15,7 +16,7 @@ import type { AuthState } from "@/lib/types";
  *    pidiendo al usuario que confirme su correo antes de iniciar sesión.
  */
 export async function register(_prev: AuthState, formData: FormData): Promise<AuthState> {
-  const email = String(formData.get("email") ?? "").trim();
+  const email = normalizeEmail(formData.get("email"));
   const password = String(formData.get("password") ?? "");
   // Sin destino explícito, la cuenta recién creada va al test de diagnóstico:
   // es lo que define el nivel con el que el tutor adapta sus explicaciones.

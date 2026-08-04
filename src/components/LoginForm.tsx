@@ -76,8 +76,12 @@ export function LoginForm({ redirectTo, notice }: LoginFormProps) {
         ¿Olvidaste tu contraseña?
       </Link>
 
+      {/* role="alert" para que el lector de pantalla lo anuncie al volver la
+          Server Action: el error aparece lejos del foco (que sigue en el botón). */}
       {state.error && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">{state.error}</p>
+        <p role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700">
+          {state.error}
+        </p>
       )}
 
       <SubmitButton />

@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { normalizeEmail } from "@/lib/auth-email";
 import { loginPath, resetPasswordRedirectUrl } from "@/lib/auth-redirect";
 
 /**
@@ -22,7 +23,7 @@ export function ForgotPasswordForm() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const address = email.trim();
+    const address = normalizeEmail(email);
     if (!address) {
       setError("Introduce tu correo electrónico.");
       return;
@@ -55,7 +56,8 @@ export function ForgotPasswordForm() {
           Te hemos enviado un correo con instrucciones para restablecer tu contraseña.
         </p>
         <p className="text-xs text-slate-500">
-          Revisa la bandeja de entrada de <span className="font-medium">{email.trim()}</span> (y la
+          Revisa la bandeja de entrada de{" "}
+          <span className="font-medium">{normalizeEmail(email)}</span> (y la
           carpeta de spam). El enlace caduca en una hora.
         </p>
         <Link
