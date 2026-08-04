@@ -4,34 +4,15 @@ import { redirect } from "next/navigation";
 import type { AuthError } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { normalizeEmail } from "@/lib/auth-email";
+import {
+  authErrorLogDetail,
+  CONNECTION_ERROR_MESSAGE,
+  describeAuthError,
+  isConnectionError,
+  isServerFault,
+} from "@/lib/auth-error";
 import { authCallbackUrl, DEFAULT_AFTER_REGISTER, resolveRedirectTo } from "@/lib/auth-redirect";
 import type { AuthState } from "@/lib/types";
-
-/**
- * Saca un texto utilizable del error de Supabase.
- *
- * `error.message` no siempre trae algo legible: cuando el servidor de Auth
- * responde con un cuerpo de error vacío, el SDK guarda ahí el literal "{}"
- * —`JSON.stringify` del cuerpo— y eso es lo que acabó saliendo en pantalla como
- * "No se pudo crear la cuenta: {}". Por eso los descartes son por CONTENIDO y
- * no por si el campo existe: `message ?? name` no habría arreglado nada.
- *
- * Cuando no hay texto se compone algo con el código y el estado HTTP, que al
- * menos permiten ubicar el fallo en los logs de Supabase.
- */
-function describeAuthError(error: AuthError): string {
-  const useless = new Set(["", "{}", "[]", "null", "undefined", "[object object]"]);
-
-  for (const candidate of [error.message, error.name]) {
-    const text = candidate?.trim();
-    if (text && !useless.has(text.toLowerCase())) return text;
-  }
-
-  const parts: string[] = [];
-  if (error.code) parts.push(`código ${error.code}`);
-  if (error.status) parts.push(`HTTP ${error.status}`);
-  return parts.length > 0 ? parts.join(", ") : "el servidor no devolvió detalles";
-}
 
 /**
  * Traduce el error de `signUp` al mensaje que ve el usuario.
@@ -46,12 +27,19 @@ function describeAuthError(error: AuthError): string {
 function registerErrorMessage(error: AuthError): string {
   const detail = describeAuthError(error);
   const message = error.message ?? "";
-  // El `name` entra en la mezcla porque los fallos de red llegan SOLO ahí:
-  // AuthRetryableFetchError no trae ni código ni mensaje aprovechable.
-  const hint = `${error.name ?? ""} ${error.code ?? ""} ${message}`.toLowerCase();
+  const hint = `${error.code ?? ""} ${message}`.toLowerCase();
 
-  if (hint.includes("retryable") || hint.includes("failed to fetch") || error.status === 0) {
-    return "Error de conexión con el servicio de autenticación. Por favor reintenta en un momento.";
+  // Las dos comprobaciones van primero y en este orden: mientras el fallo no
+  // sea del usuario, ninguna de las ramas de abajo aplica. Y separan lo que se
+  // arregla reintentando (502/503/504, sin respuesta) de lo que no (5xx).
+  if (isConnectionError(error)) {
+    return CONNECTION_ERROR_MESSAGE;
+  }
+  if (isServerFault(error)) {
+    // Los datos del formulario no tienen nada que ver, así que no se le sugiere
+    // cambiarlos. "Registrado" es el incidente, no la cuenta: se dice explícito
+    // para que nadie lo lea como que el alta sí funcionó.
+    return "No pudimos crear la cuenta por un problema en nuestro servidor, no por tus datos. El fallo quedó anotado en nuestros registros; inténtalo de nuevo en unos minutos.";
   }
   if (
     hint.includes("already registered") ||
@@ -83,16 +71,6 @@ function registerErrorMessage(error: AuthError): string {
   }
   if (hint.includes("email_address_not_authorized")) {
     return "Este correo no está autorizado para registrarse. Prueba con otra dirección.";
-  }
-  if (
-    hint.includes("unexpected_failure") ||
-    hint.includes("database error") ||
-    hint.includes("error sending")
-  ) {
-    // Fallo del lado de Supabase, no del usuario: el trigger que crea el perfil
-    // o el envío del correo. Reintentar con otros datos no cambia nada, así que
-    // no se le sugiere.
-    return "No pudimos crear la cuenta por un problema de nuestro servidor. Ya quedó registrado; inténtalo en unos minutos.";
   }
 
   return `No se pudo crear la cuenta: ${detail}`;
@@ -161,9 +139,7 @@ export async function register(_prev: AuthState, formData: FormData): Promise<Au
       "FetchError details:",
       JSON.stringify(thrown, Object.getOwnPropertyNames(thrown ?? {})),
     );
-    return {
-      error: "Error de conexión con el servicio de autenticación. Por favor reintenta en un momento.",
-    };
+    return { error: CONNECTION_ERROR_MESSAGE };
   }
 
   const { data, error } = result;
@@ -171,15 +147,7 @@ export async function register(_prev: AuthState, formData: FormData): Promise<Au
   if (error) {
     // El detalle completo solo al log del servidor (Vercel -> Logs): trae el
     // status HTTP y el código que el mensaje traducido se deja por el camino.
-    // `getOwnPropertyNames` por el mismo motivo que arriba: sin él, un AuthError
-    // se serializa como "{}" y el log no sirve de nada.
-    console.error("SignUp error detail:", {
-      message: error.message,
-      name: error.name,
-      code: error.code,
-      status: error.status,
-      raw: JSON.stringify(error, Object.getOwnPropertyNames(error)),
-    });
+    console.error("SignUp error detail:", authErrorLogDetail(error));
     return { error: registerErrorMessage(error) };
   }
 
